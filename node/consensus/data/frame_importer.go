@@ -231,15 +231,6 @@ func (e *DataClockConsensusEngine) applySnapshot(
 	key = binary.BigEndian.AppendUint64(key, 0)
 	key = append(key, e.filter...)
 
-	iter, err := temporaryStore.NewIter(
-		nil,
-		nil,
-	)
-
-	for iter.First(); iter.Valid(); iter.Next() {
-		fmt.Printf("%x\n", iter.Key())
-	}
-
 	_, _, err = temporaryClockStore.GetDataClockFrame(
 		e.filter,
 		max.FrameNumber+1,
