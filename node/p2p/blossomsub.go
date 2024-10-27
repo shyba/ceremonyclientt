@@ -854,33 +854,35 @@ func discoverPeers(
 			return
 		}
 
-		count := 12
+		count := 36
 		for peer := range peerChan {
 			if count == 0 {
 				break
 			}
 			peer := peer
-			if peer.ID == h.ID() ||
-				h.Network().Connectedness(peer.ID) == network.Connected ||
-				h.Network().Connectedness(peer.ID) == network.Limited {
-				continue
-			}
+			count--
+			go func() {
+				if peer.ID == h.ID() ||
+					h.Network().Connectedness(peer.ID) == network.Connected ||
+					h.Network().Connectedness(peer.ID) == network.Limited {
+					return
+				}
 
-			logger.Debug("found peer", zap.String("peer_id", peer.ID.String()))
-			err := h.Connect(ctx, peer)
-			if err != nil {
-				logger.Debug(
-					"error while connecting to blossomsub peer",
-					zap.String("peer_id", peer.ID.String()),
-					zap.Error(err),
-				)
-			} else {
-				count--
-				logger.Debug(
-					"connected to peer",
-					zap.String("peer_id", peer.ID.String()),
-				)
-			}
+				logger.Debug("found peer", zap.String("peer_id", peer.ID.String()))
+				err := h.Connect(ctx, peer)
+				if err != nil {
+					logger.Debug(
+						"error while connecting to blossomsub peer",
+						zap.String("peer_id", peer.ID.String()),
+						zap.Error(err),
+					)
+				} else {
+					logger.Debug(
+						"connected to peer",
+						zap.String("peer_id", peer.ID.String()),
+					)
+				}
+			}()
 		}
 	}
 
