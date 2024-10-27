@@ -517,19 +517,12 @@ func initDHT(
 	var kademliaDHT *dht.IpfsDHT
 	var err error
 	if isBootstrapPeer {
-		if p2pConfig.Network == 0 {
-			panic(
-				"this release is for normal peers only, if you are running a " +
-					"bootstrap node, please use v2.0-bootstrap",
-			)
-		} else {
-			kademliaDHT, err = dht.New(
-				ctx,
-				h,
-				dht.Mode(dht.ModeServer),
-				dht.BootstrapPeers(bootstrappers...),
-			)
-		}
+		kademliaDHT, err = dht.New(
+			ctx,
+			h,
+			dht.Mode(dht.ModeServer),
+			dht.BootstrapPeers(bootstrappers...),
+		)
 	} else {
 		kademliaDHT, err = dht.New(
 			ctx,
