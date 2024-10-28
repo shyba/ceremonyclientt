@@ -141,6 +141,14 @@ func (e *DataClockConsensusEngine) runPreMidnightProofWorker() {
 				time.Sleep(10 * time.Second)
 				cc.Close()
 				cc = nil
+				err = e.pubSub.Reconnect([]byte(peerId))
+				if err != nil {
+					e.logger.Error(
+						"got error response, waiting...",
+						zap.Error(err),
+					)
+					time.Sleep(10 * time.Second)
+				}
 				continue
 			}
 
@@ -211,13 +219,11 @@ func (e *DataClockConsensusEngine) runPreMidnightProofWorker() {
 							Signature: sig,
 						},
 					},
+					grpc.MaxCallSendMsgSize(1*1024*1024),
+					grpc.MaxCallRecvMsgSize(1*1024*1024),
 				)
 
 				if err != nil {
-					e.logger.Error(
-						"got error response, waiting...",
-						zap.Error(err),
-					)
 					if strings.Contains(
 						err.Error(),
 						application.ErrInvalidStateTransition.Error(),
@@ -229,10 +235,23 @@ func (e *DataClockConsensusEngine) runPreMidnightProofWorker() {
 						return
 					}
 
+					e.logger.Error(
+						"got error response, waiting...",
+						zap.Error(err),
+					)
+
 					resume = make([]byte, 32)
 					cc.Close()
 					cc = nil
 					time.Sleep(10 * time.Second)
+					err = e.pubSub.Reconnect([]byte(peerId))
+					if err != nil {
+						e.logger.Error(
+							"got error response, waiting...",
+							zap.Error(err),
+						)
+						time.Sleep(10 * time.Second)
+					}
 					break
 				}
 

@@ -349,7 +349,7 @@ func (e *DataClockConsensusEngine) Start() <-chan error {
 				panic(err)
 			}
 
-			if frame.FrameNumber >= nextFrame.FrameNumber ||
+			if frame.FrameNumber-100 >= nextFrame.FrameNumber ||
 				nextFrame.FrameNumber == 0 {
 				time.Sleep(60 * time.Second)
 				continue

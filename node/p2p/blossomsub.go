@@ -575,6 +575,14 @@ func initDHT(
 	return kademliaDHT
 }
 
+func (b *BlossomSub) Reconnect(peerId []byte) error {
+	peer := peer.ID(peerId)
+	info := b.h.Peerstore().PeerInfo(peer)
+	b.h.ConnManager().Unprotect(info.ID, "bootstrap")
+	time.Sleep(10 * time.Second)
+	return b.h.Connect(b.ctx, info)
+}
+
 func (b *BlossomSub) GetPeerScore(peerId []byte) int64 {
 	b.peerScoreMx.Lock()
 	score := b.peerScore[string(peerId)]

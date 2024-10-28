@@ -72,6 +72,7 @@ func (p pubsub) GetPublicKey() []byte                       { return p.pubkey }
 func (pubsub) GetPeerScore(peerId []byte) int64             { return 0 }
 func (pubsub) SetPeerScore(peerId []byte, score int64)      {}
 func (pubsub) AddPeerScore(peerId []byte, scoreDelta int64) {}
+func (pubsub) Reconnect(peerId []byte) error                { return nil }
 
 type outputs struct {
 	difficulty  uint32

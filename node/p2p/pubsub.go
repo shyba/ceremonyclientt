@@ -36,4 +36,5 @@ type PubSub interface {
 	GetPeerScore(peerId []byte) int64
 	SetPeerScore(peerId []byte, score int64)
 	AddPeerScore(peerId []byte, scoreDelta int64)
+	Reconnect(peerId []byte) error
 }
