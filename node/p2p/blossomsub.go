@@ -223,7 +223,7 @@ func NewBlossomSub(
 
 	verifyReachability(p2pConfig)
 
-	discoverPeers(p2pConfig, ctx, logger, h, routingDiscovery)
+	discoverPeers(p2pConfig, ctx, logger, h, routingDiscovery, true)
 
 	// TODO: turn into an option flag for console logging, this is too noisy for
 	// default logging behavior
@@ -308,7 +308,8 @@ func NewBlossomSub(
 			time.Sleep(30 * time.Second)
 			for _, b := range bs.bitmaskMap {
 				if len(b.ListPeers()) < 4 {
-					discoverPeers(p2pConfig, bs.ctx, logger, bs.h, routingDiscovery)
+					discoverPeers(p2pConfig, bs.ctx, logger, bs.h, routingDiscovery, false)
+					break
 				}
 			}
 		}
@@ -580,7 +581,12 @@ func (b *BlossomSub) Reconnect(peerId []byte) error {
 	info := b.h.Peerstore().PeerInfo(peer)
 	b.h.ConnManager().Unprotect(info.ID, "bootstrap")
 	time.Sleep(10 * time.Second)
-	return b.h.Connect(b.ctx, info)
+	if err := b.h.Connect(b.ctx, info); err != nil {
+		return errors.Wrap(err, "reconnect")
+	}
+
+	b.h.ConnManager().Protect(info.ID, "bootstrap")
+	return nil
 }
 
 func (b *BlossomSub) GetPeerScore(peerId []byte) int64 {
@@ -842,6 +848,7 @@ func discoverPeers(
 	logger *zap.Logger,
 	h host.Host,
 	routingDiscovery *routing.RoutingDiscovery,
+	init bool,
 ) {
 	logger.Info("initiating peer discovery")
 
@@ -855,39 +862,36 @@ func discoverPeers(
 			return
 		}
 
-		count := 36
 		for peer := range peerChan {
-			if count == 0 {
-				break
-			}
 			peer := peer
-			count--
-			go func() {
-				if peer.ID == h.ID() ||
-					h.Network().Connectedness(peer.ID) == network.Connected ||
-					h.Network().Connectedness(peer.ID) == network.Limited {
-					return
-				}
+			if peer.ID == h.ID() ||
+				h.Network().Connectedness(peer.ID) == network.Connected ||
+				h.Network().Connectedness(peer.ID) == network.Limited {
+				return
+			}
 
-				logger.Debug("found peer", zap.String("peer_id", peer.ID.String()))
-				err := h.Connect(ctx, peer)
-				if err != nil {
-					logger.Debug(
-						"error while connecting to blossomsub peer",
-						zap.String("peer_id", peer.ID.String()),
-						zap.Error(err),
-					)
-				} else {
-					logger.Debug(
-						"connected to peer",
-						zap.String("peer_id", peer.ID.String()),
-					)
-				}
-			}()
+			logger.Debug("found peer", zap.String("peer_id", peer.ID.String()))
+			err := h.Connect(ctx, peer)
+			if err != nil {
+				logger.Debug(
+					"error while connecting to blossomsub peer",
+					zap.String("peer_id", peer.ID.String()),
+					zap.Error(err),
+				)
+			} else {
+				logger.Debug(
+					"connected to peer",
+					zap.String("peer_id", peer.ID.String()),
+				)
+			}
 		}
 	}
 
-	discover()
+	if init {
+		go discover()
+	} else {
+		discover()
+	}
 
 	logger.Info("completed peer discovery")
 }
