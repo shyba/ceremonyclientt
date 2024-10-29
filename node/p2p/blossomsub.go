@@ -92,6 +92,80 @@ func getPeerID(p2pConfig *config.P2PConfig) peer.ID {
 	return id
 }
 
+func NewBlossomSubStreamer(
+	p2pConfig *config.P2PConfig,
+	logger *zap.Logger,
+) *BlossomSub {
+	ctx := context.Background()
+
+	opts := []libp2pconfig.Option{
+		libp2p.ListenAddrStrings(p2pConfig.ListenMultiaddr),
+	}
+
+	bootstrappers := []peer.AddrInfo{}
+
+	peerinfo, err := peer.AddrInfoFromString("/ip4/185.209.178.191/udp/8336/quic-v1/p2p/QmcKQjpQmLpbDsiif2MuakhHFyxWvqYauPsJDaXnLav7PJ")
+	if err != nil {
+		panic(err)
+	}
+
+	bootstrappers = append(bootstrappers, *peerinfo)
+
+	var privKey crypto.PrivKey
+	if p2pConfig.PeerPrivKey != "" {
+		peerPrivKey, err := hex.DecodeString(p2pConfig.PeerPrivKey)
+		if err != nil {
+			panic(errors.Wrap(err, "error unmarshaling peerkey"))
+		}
+
+		privKey, err = crypto.UnmarshalEd448PrivateKey(peerPrivKey)
+		if err != nil {
+			panic(errors.Wrap(err, "error unmarshaling peerkey"))
+		}
+
+		opts = append(opts, libp2p.Identity(privKey))
+	}
+
+	bs := &BlossomSub{
+		ctx:             ctx,
+		logger:          logger,
+		bitmaskMap:      make(map[string]*blossomsub.Bitmask),
+		signKey:         privKey,
+		peerScore:       make(map[string]int64),
+		isBootstrapPeer: false,
+		network:         p2pConfig.Network,
+	}
+
+	h, err := libp2p.New(opts...)
+	if err != nil {
+		panic(errors.Wrap(err, "error constructing p2p"))
+	}
+
+	logger.Info("established peer id", zap.String("peer_id", h.ID().String()))
+
+	kademliaDHT := initDHT(
+		ctx,
+		p2pConfig,
+		logger,
+		h,
+		false,
+		bootstrappers,
+	)
+	routingDiscovery := routing.NewRoutingDiscovery(kademliaDHT)
+	util.Advertise(ctx, routingDiscovery, getNetworkNamespace(p2pConfig.Network))
+
+	if err != nil {
+		panic(err)
+	}
+
+	peerID := h.ID()
+	bs.peerID = peerID
+	bs.h = h
+	bs.signKey = privKey
+
+	return bs
+}
+
 func NewBlossomSub(
 	p2pConfig *config.P2PConfig,
 	logger *zap.Logger,
