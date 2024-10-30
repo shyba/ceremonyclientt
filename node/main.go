@@ -3,24 +3,18 @@
 package main
 
 import (
-	"bytes"
 	"encoding/binary"
 	"encoding/hex"
 	"flag"
 	"fmt"
 	"io/fs"
-	"log"
 	"math/big"
 	"os"
 	"os/exec"
-	"os/signal"
 	"path/filepath"
 	"runtime"
-	rdebug "runtime/debug"
-	"runtime/pprof"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"go.uber.org/zap"
@@ -30,7 +24,6 @@ import (
 	"source.quilibrium.com/quilibrium/monorepo/node/store"
 	"source.quilibrium.com/quilibrium/monorepo/node/utils"
 
-	"github.com/cloudflare/circl/sign/ed448"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pbnjay/memory"
@@ -39,7 +32,6 @@ import (
 	"source.quilibrium.com/quilibrium/monorepo/node/config"
 	qcrypto "source.quilibrium.com/quilibrium/monorepo/node/crypto"
 	"source.quilibrium.com/quilibrium/monorepo/node/crypto/kzg"
-	"source.quilibrium.com/quilibrium/monorepo/node/rpc"
 )
 
 var (
@@ -48,76 +40,6 @@ var (
 		filepath.Join(".", ".config"),
 		"the configuration directory",
 	)
-	balance = flag.Bool(
-		"balance",
-		false,
-		"print the node's confirmed token balance to stdout and exit",
-	)
-	dbConsole = flag.Bool(
-		"db-console",
-		false,
-		"starts the node in database console mode",
-	)
-	importPrivKey = flag.String(
-		"import-priv-key",
-		"",
-		"creates a new config using a specific key from the phase one ceremony",
-	)
-	peerId = flag.Bool(
-		"peer-id",
-		false,
-		"print the peer id to stdout from the config and exit",
-	)
-	cpuprofile = flag.String(
-		"cpuprofile",
-		"",
-		"write cpu profile to file",
-	)
-	memprofile = flag.String(
-		"memprofile",
-		"",
-		"write memory profile after 20m to this file",
-	)
-	nodeInfo = flag.Bool(
-		"node-info",
-		false,
-		"print node related information",
-	)
-	debug = flag.Bool(
-		"debug",
-		false,
-		"sets log output to debug (verbose)",
-	)
-	dhtOnly = flag.Bool(
-		"dht-only",
-		false,
-		"sets a node to run strictly as a dht bootstrap peer (not full node)",
-	)
-	network = flag.Uint(
-		"network",
-		0,
-		"sets the active network for the node (mainnet = 0, primary testnet = 1)",
-	)
-	signatureCheck = flag.Bool(
-		"signature-check",
-		signatureCheckDefault(),
-		"enables or disables signature validation (default true or value of QUILIBRIUM_SIGNATURE_CHECK env var)",
-	)
-	core = flag.Int(
-		"core",
-		0,
-		"specifies the core of the process (defaults to zero, the initial launcher)",
-	)
-	parentProcess = flag.Int(
-		"parent-process",
-		0,
-		"specifies the parent process pid for a data worker",
-	)
-	integrityCheck = flag.Bool(
-		"integrity-check",
-		false,
-		"runs an integrity check on the store, helpful for confirming backups are not corrupted (defaults to false)",
-	)
 	emergencyRepair = flag.Bool(
 		"emergency-repair",
 		false,
@@ -125,163 +47,8 @@ var (
 	)
 )
 
-func signatureCheckDefault() bool {
-	envVarValue, envVarExists := os.LookupEnv("QUILIBRIUM_SIGNATURE_CHECK")
-	if envVarExists {
-		def, err := strconv.ParseBool(envVarValue)
-		if err == nil {
-			return def
-		} else {
-			fmt.Println("Invalid environment variable QUILIBRIUM_SIGNATURE_CHECK, must be 'true' or 'false'. Got: " + envVarValue)
-		}
-	}
-
-	return true
-}
-
 func main() {
 	flag.Parse()
-
-	if *signatureCheck {
-		if runtime.GOOS == "windows" {
-			fmt.Println("Signature check not available for windows yet, skipping...")
-		} else {
-			ex, err := os.Executable()
-			if err != nil {
-				panic(err)
-			}
-
-			b, err := os.ReadFile(ex)
-			if err != nil {
-				fmt.Println(
-					"Error encountered during signature check – are you running this " +
-						"from source? (use --signature-check=false)",
-				)
-				panic(err)
-			}
-
-			checksum := sha3.Sum256(b)
-			digest, err := os.ReadFile(ex + ".dgst")
-			if err != nil {
-				fmt.Println("Digest file not found")
-				os.Exit(1)
-			}
-
-			parts := strings.Split(string(digest), " ")
-			if len(parts) != 2 {
-				fmt.Println("Invalid digest file format")
-				os.Exit(1)
-			}
-
-			digestBytes, err := hex.DecodeString(parts[1][:64])
-			if err != nil {
-				fmt.Println("Invalid digest file format")
-				os.Exit(1)
-			}
-
-			if !bytes.Equal(checksum[:], digestBytes) {
-				fmt.Println("Invalid digest for node")
-				os.Exit(1)
-			}
-
-			count := 0
-
-			for i := 1; i <= len(config.Signatories); i++ {
-				signatureFile := fmt.Sprintf(ex+".dgst.sig.%d", i)
-				sig, err := os.ReadFile(signatureFile)
-				if err != nil {
-					continue
-				}
-
-				pubkey, _ := hex.DecodeString(config.Signatories[i-1])
-				if !ed448.Verify(pubkey, digest, sig, "") {
-					fmt.Printf("Failed signature check for signatory #%d\n", i)
-					os.Exit(1)
-				}
-				count++
-			}
-
-			if count < ((len(config.Signatories)-4)/2)+((len(config.Signatories)-4)%2) {
-				fmt.Printf("Quorum on signatures not met")
-				os.Exit(1)
-			}
-
-			fmt.Println("Signature check passed")
-		}
-	} else {
-		fmt.Println("Signature check disabled, skipping...")
-	}
-
-	if *memprofile != "" && *core == 0 {
-		go func() {
-			for {
-				time.Sleep(5 * time.Minute)
-				f, err := os.Create(*memprofile)
-				if err != nil {
-					log.Fatal(err)
-				}
-				pprof.WriteHeapProfile(f)
-				f.Close()
-			}
-		}()
-	}
-
-	if *cpuprofile != "" && *core == 0 {
-		f, err := os.Create(*cpuprofile)
-		if err != nil {
-			log.Fatal(err)
-		}
-		pprof.StartCPUProfile(f)
-		defer pprof.StopCPUProfile()
-	}
-
-	if *balance {
-		config, err := config.LoadConfig(*configDirectory, "", false)
-		if err != nil {
-			panic(err)
-		}
-
-		printBalance(config)
-
-		return
-	}
-
-	if *peerId {
-		config, err := config.LoadConfig(*configDirectory, "", false)
-		if err != nil {
-			panic(err)
-		}
-
-		printPeerID(config.P2P)
-		return
-	}
-
-	if *importPrivKey != "" {
-		config, err := config.LoadConfig(*configDirectory, *importPrivKey, false)
-		if err != nil {
-			panic(err)
-		}
-
-		printPeerID(config.P2P)
-		fmt.Println("Import completed, you are ready for the launch.")
-		return
-	}
-
-	if *nodeInfo {
-		config, err := config.LoadConfig(*configDirectory, "", false)
-		if err != nil {
-			panic(err)
-		}
-
-		printNodeInfo(config)
-		return
-	}
-
-	if !*dbConsole && *core == 0 {
-		config.PrintLogo()
-		config.PrintVersion(uint8(*network))
-		fmt.Println(" ")
-	}
 
 	nodeConfig, err := config.LoadConfig(*configDirectory, "", false)
 	if err != nil {
@@ -325,185 +92,7 @@ func main() {
 		}
 	}
 
-	if *network != 0 {
-		if nodeConfig.P2P.BootstrapPeers[0] == config.BootstrapPeers[0] {
-			fmt.Println(
-				"Node has specified to run outside of mainnet but is still " +
-					"using default bootstrap list. This will fail. Exiting.",
-			)
-			os.Exit(1)
-		}
-
-		nodeConfig.Engine.GenesisSeed = fmt.Sprintf(
-			"%02x%s",
-			byte(*network),
-			nodeConfig.Engine.GenesisSeed,
-		)
-		nodeConfig.P2P.Network = uint8(*network)
-		fmt.Println(
-			"Node is operating outside of mainnet – be sure you intended to do this.",
-		)
-	}
-
-	clearIfTestData(*configDirectory, nodeConfig)
-
-	if *dbConsole {
-		console, err := app.NewDBConsole(nodeConfig)
-		if err != nil {
-			panic(err)
-		}
-
-		console.Run()
-		return
-	}
-
-	if *dhtOnly {
-		done := make(chan os.Signal, 1)
-		signal.Notify(done, syscall.SIGINT, syscall.SIGTERM)
-		dht, err := app.NewDHTNode(nodeConfig)
-		if err != nil {
-			panic(err)
-		}
-
-		go func() {
-			dht.Start()
-		}()
-
-		<-done
-		dht.Stop()
-		return
-	}
-
-	if *core != 0 {
-		// runtime.GOMAXPROCS(2)
-		rdebug.SetGCPercent(9999)
-
-		if nodeConfig.Engine.DataWorkerMemoryLimit == 0 {
-			nodeConfig.Engine.DataWorkerMemoryLimit = 1792 * 1024 * 1024 // 1.75GiB
-		}
-
-		rdebug.SetMemoryLimit(nodeConfig.Engine.DataWorkerMemoryLimit)
-
-		if nodeConfig.Engine.DataWorkerBaseListenMultiaddr == "" {
-			nodeConfig.Engine.DataWorkerBaseListenMultiaddr = "/ip4/127.0.0.1/tcp/%d"
-		}
-
-		if nodeConfig.Engine.DataWorkerBaseListenPort == 0 {
-			nodeConfig.Engine.DataWorkerBaseListenPort = 40000
-		}
-
-		if *parentProcess == 0 && len(nodeConfig.Engine.DataWorkerMultiaddrs) == 0 {
-			panic("parent process pid not specified")
-		}
-
-		l, err := zap.NewProduction()
-		if err != nil {
-			panic(err)
-		}
-
-		rpcMultiaddr := fmt.Sprintf(
-			nodeConfig.Engine.DataWorkerBaseListenMultiaddr,
-			int(nodeConfig.Engine.DataWorkerBaseListenPort)+*core-1,
-		)
-
-		if len(nodeConfig.Engine.DataWorkerMultiaddrs) != 0 {
-			rpcMultiaddr = nodeConfig.Engine.DataWorkerMultiaddrs[*core-1]
-		}
-
-		srv, err := rpc.NewDataWorkerIPCServer(
-			rpcMultiaddr,
-			l,
-			uint32(*core)-1,
-			qcrypto.NewWesolowskiFrameProver(l),
-			nodeConfig,
-			*parentProcess,
-		)
-		if err != nil {
-			panic(err)
-		}
-
-		err = srv.Start()
-		if err != nil {
-			panic(err)
-		}
-		return
-	}
-
-	fmt.Println("Loading ceremony state and starting node...")
-
-	if !*integrityCheck {
-		go spawnDataWorkers(nodeConfig)
-	}
-
-	kzg.Init()
-
-	report := RunSelfTestIfNeeded(*configDirectory, nodeConfig)
-
-	if *core == 0 {
-		for {
-			genesis, err := config.DownloadAndVerifyGenesis(*network)
-			if err != nil {
-				time.Sleep(10 * time.Minute)
-				continue
-			}
-
-			nodeConfig.Engine.GenesisSeed = genesis.GenesisSeedHex
-			break
-		}
-	}
-
-	done := make(chan os.Signal, 1)
-	signal.Notify(done, syscall.SIGINT, syscall.SIGTERM)
-	var node *app.Node
-	if *debug {
-		node, err = app.NewDebugNode(nodeConfig, report)
-	} else {
-		node, err = app.NewNode(nodeConfig, report)
-	}
-
-	if err != nil {
-		panic(err)
-	}
-
-	if *integrityCheck {
-		fmt.Println("Running integrity check...")
-		node.VerifyProofIntegrity()
-		fmt.Println("Integrity check passed!")
-		return
-	}
-
-	// runtime.GOMAXPROCS(1)
-
-	if nodeConfig.ListenGRPCMultiaddr != "" {
-		srv, err := rpc.NewRPCServer(
-			nodeConfig.ListenGRPCMultiaddr,
-			nodeConfig.ListenRestMultiaddr,
-			node.GetLogger(),
-			node.GetDataProofStore(),
-			node.GetClockStore(),
-			node.GetCoinStore(),
-			node.GetKeyManager(),
-			node.GetPubSub(),
-			node.GetMasterClock(),
-			node.GetExecutionEngines(),
-		)
-		if err != nil {
-			panic(err)
-		}
-
-		go func() {
-			err := srv.Start()
-			if err != nil {
-				panic(err)
-			}
-		}()
-	}
-
-	node.Start()
-
-	<-done
-	stopDataWorkers()
-	node.Stop()
+	fmt.Println("This is not a normal node distribution, this is a repair tool. To run repair, use --emergency-repair.")
 }
 
 func runEmergencyRepair(cfg *config.Config) {
