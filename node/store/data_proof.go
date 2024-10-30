@@ -42,6 +42,7 @@ type DataProofStore interface {
 		increment uint32,
 		input []byte,
 		output []byte,
+		backfill bool,
 	) error
 	GetLatestDataTimeProof(peerId []byte) (
 		increment uint32,
@@ -480,6 +481,7 @@ func (p *PebbleDataProofStore) PutDataTimeProof(
 	increment uint32,
 	input []byte,
 	output []byte,
+	backfill bool,
 ) error {
 	// Now, for the assumptions.
 	// Rewards are calculated based off of a current average rate of growth such
@@ -505,16 +507,18 @@ func (p *PebbleDataProofStore) PutDataTimeProof(
 		return errors.Wrap(err, "put data time proof")
 	}
 
-	if len(prev) != 0 {
-		priorSum.SetBytes(prev[4:])
-		prevIncrement := binary.BigEndian.Uint32(prev[:4])
+	if !backfill {
+		if len(prev) != 0 {
+			priorSum.SetBytes(prev[4:])
+			prevIncrement := binary.BigEndian.Uint32(prev[:4])
 
-		if err = closer.Close(); err != nil {
-			return errors.Wrap(err, "put data time proof")
-		}
+			if err = closer.Close(); err != nil {
+				return errors.Wrap(err, "put data time proof")
+			}
 
-		if prevIncrement != increment-1 {
-			return errors.Wrap(errors.New("invalid increment"), "put data time proof")
+			if prevIncrement != increment-1 {
+				return errors.Wrap(errors.New("invalid increment"), "put data time proof")
+			}
 		}
 	}
 
@@ -536,8 +540,10 @@ func (p *PebbleDataProofStore) PutDataTimeProof(
 	priorSum.Add(priorSum, reward)
 	latest = append(latest, priorSum.FillBytes(make([]byte, 32))...)
 
-	if err = txn.Set(dataTimeProofLatestKey(peerId), latest); err != nil {
-		return errors.Wrap(err, "put data time proof")
+	if !backfill {
+		if err = txn.Set(dataTimeProofLatestKey(peerId), latest); err != nil {
+			return errors.Wrap(err, "put data time proof")
+		}
 	}
 
 	return nil

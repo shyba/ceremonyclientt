@@ -66,4 +66,9 @@ type FrameProver interface {
 		core uint32,
 		proof []byte,
 	) bool
+	RecalculatePreDuskChallengeProof(
+		challenge []byte,
+		core uint32,
+		increment uint32,
+	) ([]byte, error)
 }

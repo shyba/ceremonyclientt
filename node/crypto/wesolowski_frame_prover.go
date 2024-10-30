@@ -638,3 +638,24 @@ func (w *WesolowskiFrameProver) VerifyPreDuskChallengeProof(
 	check := vdf.WesolowskiVerify(b, difficulty, [516]byte(proof))
 	return check
 }
+
+func (w *WesolowskiFrameProver) RecalculatePreDuskChallengeProof(
+	challenge []byte,
+	core uint32,
+	increment uint32,
+) ([]byte, error) {
+	difficulty := 200000 - (increment / 4)
+	if difficulty < 25000 || increment > 800000 {
+		difficulty = 25000
+	}
+
+	instanceInput := binary.BigEndian.AppendUint32([]byte{}, core)
+	instanceInput = append(instanceInput, challenge...)
+	b := sha3.Sum256(instanceInput)
+	o := vdf.WesolowskiSolve(b, uint32(difficulty))
+
+	output := make([]byte, 516)
+	copy(output[:], o[:])
+
+	return output, nil
+}
