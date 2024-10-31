@@ -95,6 +95,30 @@ func main() {
 	fmt.Println("This is not a normal node distribution, this is a repair tool. To run repair, use --emergency-repair.")
 }
 
+func check(pstore store.DataProofStore, peerId []byte, i uint32) bool {
+	defer func() {
+		if err := recover(); err != nil {
+			fmt.Println(err)
+		}
+	}()
+	fmt.Println("Checking increment", i)
+	_, _, _, _, err := pstore.GetDataTimeProof(
+		[]byte(peerId),
+		uint32(i),
+	)
+
+	if err != nil {
+		if !errors.Is(err, store.ErrNotFound) {
+			fmt.Println("Uncorrectable error detected: ", err)
+		}
+
+		fmt.Println("Missing record at increment", i, " – adding to repair set")
+		return true
+	}
+
+	return false
+}
+
 func runEmergencyRepair(cfg *config.Config) {
 	fmt.Println("Starting emergency repair.")
 	kzg.Init()
@@ -132,19 +156,7 @@ func runEmergencyRepair(cfg *config.Config) {
 	gapStarts := []uint32{}
 
 	for i := uint32(0); i < increment; i++ {
-		fmt.Println("Checking increment", i)
-		_, _, _, _, err := pstore.GetDataTimeProof(
-			[]byte(peerId),
-			uint32(i),
-		)
-
-		if err != nil {
-			if !errors.Is(err, store.ErrNotFound) {
-				fmt.Println("Uncorrectable error detected: ", err)
-				os.Exit(1)
-			}
-
-			fmt.Println("Missing record at increment", i, " – adding to repair set")
+		if check(pstore, []byte(peerId), i) {
 			gapStarts = append(gapStarts, i-1)
 		}
 	}
