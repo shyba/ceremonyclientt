@@ -19,8 +19,8 @@ type EngineConfig struct {
 	// Alternative configuration path to manually specify data workers by multiaddr
 	DataWorkerMultiaddrs          []string `yaml:"dataWorkerMultiaddrs"`
 	MultisigProverEnrollmentPaths []string `yaml:"multisigProverEnrollmentPaths"`
-	// Does not verify execution, enables light provers
-	LightNode bool
+	// Fully verifies execution, omit to enable light prover
+	FullProver bool
 	// Automatically merges coins after minting once a sufficient number has been
 	// accrued
 	AutoMergeCoins bool

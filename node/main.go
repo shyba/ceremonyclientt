@@ -126,7 +126,7 @@ var (
 	)
 	lightProver = flag.Bool(
 		"light-prover",
-		false,
+		true,
 		"when enabled, frame execution validation is skipped",
 	)
 )
@@ -327,11 +327,9 @@ func main() {
 		)
 	}
 
-	if *lightProver {
-		nodeConfig.Engine.LightNode = true
-		fmt.Println(
-			"Node is running in light mode – be sure you intended to do this.",
-		)
+	// If it's not explicitly set to true, we should defer to flags
+	if !nodeConfig.Engine.FullProver {
+		nodeConfig.Engine.FullProver = !*lightProver
 	}
 
 	clearIfTestData(*configDirectory, nodeConfig)
