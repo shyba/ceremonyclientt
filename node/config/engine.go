@@ -19,6 +19,8 @@ type EngineConfig struct {
 	// Alternative configuration path to manually specify data workers by multiaddr
 	DataWorkerMultiaddrs          []string `yaml:"dataWorkerMultiaddrs"`
 	MultisigProverEnrollmentPaths []string `yaml:"multisigProverEnrollmentPaths"`
+	// Does not verify execution, enables light provers
+	LightNode bool
 
 	// Values used only for testing – do not override these in production, your
 	// node will get kicked out

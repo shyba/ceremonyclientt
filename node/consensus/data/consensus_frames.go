@@ -59,7 +59,7 @@ func (e *DataClockConsensusEngine) collect(
 func (e *DataClockConsensusEngine) prove(
 	previousFrame *protobufs.ClockFrame,
 ) (*protobufs.ClockFrame, error) {
-	if e.lastProven >= previousFrame.FrameNumber {
+	if e.lastProven >= previousFrame.FrameNumber && e.lastProven != 0 {
 		return previousFrame, nil
 	}
 	e.stagedTransactionsMx.Lock()

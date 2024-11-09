@@ -124,6 +124,11 @@ var (
 		false,
 		"runs an integrity check on the store, helpful for confirming backups are not corrupted (defaults to false)",
 	)
+	lightProver = flag.Bool(
+		"light-prover",
+		false,
+		"when enabled, frame execution validation is skipped",
+	)
 )
 
 func signatureCheckDefault() bool {
@@ -319,6 +324,13 @@ func main() {
 		nodeConfig.P2P.Network = uint8(*network)
 		fmt.Println(
 			"Node is operating outside of mainnet – be sure you intended to do this.",
+		)
+	}
+
+	if *lightProver {
+		nodeConfig.Engine.LightNode = true
+		fmt.Println(
+			"Node is running in light mode – be sure you intended to do this.",
 		)
 	}
 

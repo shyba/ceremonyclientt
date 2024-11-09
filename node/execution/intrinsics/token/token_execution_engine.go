@@ -200,8 +200,10 @@ func NewTokenExecutionEngine(
 			[]*tries.RollingFrecencyCritbitTrie,
 			error,
 		) {
-			if err := e.VerifyExecution(frame, triesAtFrame); err != nil {
-				return nil, err
+			if !e.engineConfig.LightNode {
+				if err := e.VerifyExecution(frame, triesAtFrame); err != nil {
+					return nil, err
+				}
 			}
 			var tries []*tries.RollingFrecencyCritbitTrie
 			if tries, err = e.ProcessFrame(txn, frame, triesAtFrame); err != nil {
