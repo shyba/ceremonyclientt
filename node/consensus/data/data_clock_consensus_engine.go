@@ -618,17 +618,24 @@ func (e *DataClockConsensusEngine) Start() <-chan error {
 				if trie.Contains(peerProvingKeyAddress) {
 					e.logger.Info("creating data shard ring proof", zap.Int("ring", i))
 					outputs := e.PerformTimeProof(frame, frame.Difficulty)
-					if outputs == nil {
+					if outputs == nil || len(outputs) < 3 {
 						e.logger.Error("could not successfully build proof, reattempting")
 						break
 					}
 					modulo := len(outputs)
-					proofTree, payload, output := tries.PackOutputIntoPayloadAndProof(
+					proofTree, payload, output, err := tries.PackOutputIntoPayloadAndProof(
 						outputs,
 						modulo,
 						frame,
 						previousTree,
 					)
+					if err != nil {
+						e.logger.Error(
+							"could not successfully pack proof, reattempting",
+							zap.Error(err),
+						)
+						break
+					}
 					previousTree = proofTree
 
 					sig, err := e.pubSub.SignMessage(

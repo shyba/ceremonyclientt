@@ -31,7 +31,7 @@ func PackOutputIntoPayloadAndProof(
 	modulo int,
 	frame *protobufs.ClockFrame,
 	previousTree *mt.MerkleTree,
-) (*mt.MerkleTree, []byte, [][]byte) {
+) (*mt.MerkleTree, []byte, [][]byte, error) {
 	tree, err := mt.New(
 		&mt.Config{
 			HashFunc: func(data []byte) ([]byte, error) {
@@ -44,7 +44,7 @@ func PackOutputIntoPayloadAndProof(
 		outputs,
 	)
 	if err != nil {
-		panic(err)
+		return nil, nil, nil, errors.Wrap(err, "pack output into payload and proof")
 	}
 
 	payload := []byte("mint")
@@ -79,7 +79,7 @@ func PackOutputIntoPayloadAndProof(
 		payload = append(payload, previousTree.Leaves[int(pick)]...)
 		output = append(output, previousTree.Leaves[int(pick)])
 	}
-	return tree, payload, output
+	return tree, payload, output, nil
 }
 
 func UnpackAndVerifyOutput(
