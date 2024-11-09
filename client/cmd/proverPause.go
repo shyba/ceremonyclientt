@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"encoding/hex"
+	"bytes"
 	"strings"
 
 	"github.com/iden3/go-iden3-crypto/poseidon"
@@ -22,15 +22,9 @@ var proverPauseCmd = &cobra.Command{
 	Short: "Pauses a prover",
 	Long: `Pauses a prover (use in emergency when a worker isn't coming back online):
 	
-	pause <Filter>
-	
-	Filter – the hex bitstring of the filter to pause for
+	pause
 	`,
 	Run: func(cmd *cobra.Command, args []string) {
-		if len(args) != 1 {
-			panic("invalid arguments")
-		}
-
 		logger, err := zap.NewProduction()
 		pubsub := p2p.NewBlossomSub(NodeConfig.P2P, logger)
 		intrinsicFilter := p2p.GetBloomFilter(application.TOKEN_ADDRESS, 256, 3)
@@ -44,11 +38,7 @@ var proverPauseCmd = &cobra.Command{
 		}
 
 		payload := []byte("pause")
-		filterHex, _ := strings.CutPrefix(args[0], "0x")
-		filter, err := hex.DecodeString(filterHex)
-		if err != nil {
-			panic(err)
-		}
+		filter := bytes.Repeat([]byte{0xff}, 32)
 
 		payload = append(payload, filter...)
 
