@@ -315,7 +315,7 @@ func (d *DataTimeReel) createGenesisFrame() (
 
 // Main data consensus loop
 func (d *DataTimeReel) runLoop() {
-	for {
+	for d.running {
 		select {
 		case frame := <-d.frames:
 			rawFrame, err := d.clockStore.GetStagedDataClockFrame(
@@ -363,7 +363,9 @@ func (d *DataTimeReel) runLoop() {
 				}
 
 				// Otherwise set it as the next and process all pending
-				d.setHead(rawFrame, distance)
+				if err = d.setHead(rawFrame, distance); err != nil {
+					continue
+				}
 				d.processPending(d.head, frame)
 			} else if d.head.FrameNumber == rawFrame.FrameNumber {
 				// frames are equivalent, no need to act
@@ -538,7 +540,13 @@ func (d *DataTimeReel) processPending(
 	// 	zap.Int("pending_frame_numbers", len(d.pending)),
 	// )
 
-	for d.running {
+	for {
+		select {
+		case <-d.done:
+			d.running = false
+			return
+		default:
+		}
 		next := d.head.FrameNumber + 1
 		sel, err := d.head.GetSelector()
 		if err != nil {
@@ -587,7 +595,10 @@ func (d *DataTimeReel) processPending(
 			}
 
 			// Otherwise set it as the next and process all pending
-			d.setHead(rawFrame, distance)
+			err = d.setHead(rawFrame, distance)
+			if err != nil {
+				break
+			}
 			found = true
 			break
 		}
@@ -598,7 +609,7 @@ func (d *DataTimeReel) processPending(
 	}
 }
 
-func (d *DataTimeReel) setHead(frame *protobufs.ClockFrame, distance *big.Int) {
+func (d *DataTimeReel) setHead(frame *protobufs.ClockFrame, distance *big.Int) error {
 	d.logger.Debug(
 		"set frame to head",
 		zap.Uint64("frame_number", frame.FrameNumber),
@@ -631,7 +642,7 @@ func (d *DataTimeReel) setHead(frame *protobufs.ClockFrame, distance *big.Int) {
 	if tries, err = d.exec(txn, frame, tries); err != nil {
 		d.logger.Error("invalid frame execution, unwinding", zap.Error(err))
 		txn.Abort()
-		return
+		return errors.Wrap(err, "set head")
 	}
 
 	if err := d.clockStore.CommitDataClockFrame(
@@ -659,6 +670,7 @@ func (d *DataTimeReel) setHead(frame *protobufs.ClockFrame, distance *big.Int) {
 		default:
 		}
 	}()
+	return nil
 }
 
 func (d *DataTimeReel) getTotalDistance(frame *protobufs.ClockFrame) *big.Int {

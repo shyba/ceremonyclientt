@@ -106,6 +106,7 @@ service DataService {
 
 message ChallengeProofRequest {
   bytes peer_id = 1;
+  uint32 core = 2;
   quilibrium.node.clock.pb.ClockFrame clock_frame = 3;
 }
 

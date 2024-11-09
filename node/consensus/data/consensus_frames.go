@@ -26,15 +26,15 @@ func (e *DataClockConsensusEngine) collect(
 	latest := enqueuedFrame
 
 	for {
-		peerId, maxFrame, err := e.GetMostAheadPeer(latest.FrameNumber)
-		if maxFrame > latest.FrameNumber {
+		peerId, maxFrame, err := e.GetMostAheadPeer(e.latestFrameReceived)
+		if maxFrame > e.latestFrameReceived {
 			e.syncingStatus = SyncStatusSynchronizing
 			if err != nil {
 				e.logger.Info("no peers available for sync, waiting")
 				time.Sleep(5 * time.Second)
-			} else if maxFrame > latest.FrameNumber {
-				if maxFrame-latest.FrameNumber > 100 {
-					maxFrame = latest.FrameNumber + 100
+			} else if maxFrame > e.latestFrameReceived {
+				if maxFrame-e.latestFrameReceived > 100 {
+					maxFrame = e.latestFrameReceived + 100
 				}
 				latest, err = e.sync(latest, maxFrame, peerId)
 				if err == nil {
@@ -59,6 +59,9 @@ func (e *DataClockConsensusEngine) collect(
 func (e *DataClockConsensusEngine) prove(
 	previousFrame *protobufs.ClockFrame,
 ) (*protobufs.ClockFrame, error) {
+	if e.lastProven >= previousFrame.FrameNumber {
+		return previousFrame, nil
+	}
 	e.stagedTransactionsMx.Lock()
 	executionOutput := &protobufs.IntrinsicExecutionOutput{}
 	_, tries, err := e.clockStore.GetDataClockFrame(
@@ -199,6 +202,7 @@ func (e *DataClockConsensusEngine) prove(
 	if err != nil {
 		return nil, errors.Wrap(err, "prove")
 	}
+	e.lastProven = previousFrame.FrameNumber
 	e.logger.Info(
 		"returning new proven frame",
 		zap.Uint64("frame_number", frame.FrameNumber),

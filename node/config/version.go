@@ -40,5 +40,5 @@ func GetPatchNumber() byte {
 }
 
 func GetRCNumber() byte {
-	return 0x06
+	return 0x07
 }

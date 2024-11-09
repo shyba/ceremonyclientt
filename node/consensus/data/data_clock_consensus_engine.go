@@ -66,6 +66,7 @@ type ChannelServer = protobufs.DataService_GetPublicChannelServer
 
 type DataClockConsensusEngine struct {
 	protobufs.UnimplementedDataServiceServer
+	lastProven                  uint64
 	difficulty                  uint32
 	config                      *config.Config
 	logger                      *zap.Logger
@@ -125,6 +126,7 @@ type DataClockConsensusEngine struct {
 	txMessageProcessorCh           chan *pb.Message
 	infoMessageProcessorCh         chan *pb.Message
 	report                         *protobufs.SelfTestReport
+	clients                        []protobufs.DataIPCServiceClient
 }
 
 var _ consensus.DataConsensusEngine = (*DataClockConsensusEngine)(nil)
@@ -538,14 +540,13 @@ func (e *DataClockConsensusEngine) Start() <-chan error {
 			panic("invalid system configuration, minimum system configuration must be four cores")
 		}
 
-		var clients []protobufs.DataIPCServiceClient
 		if len(e.config.Engine.DataWorkerMultiaddrs) != 0 {
-			clients, err = e.createParallelDataClientsFromList()
+			e.clients, err = e.createParallelDataClientsFromList()
 			if err != nil {
 				panic(err)
 			}
 		} else {
-			clients, err = e.createParallelDataClientsFromBaseMultiaddr(
+			e.clients, err = e.createParallelDataClientsFromBaseMultiaddr(
 				int(parallelism),
 			)
 			if err != nil {
@@ -554,6 +555,8 @@ func (e *DataClockConsensusEngine) Start() <-chan error {
 		}
 
 		var previousTree *mt.MerkleTree
+
+		clientReconnectTest := 0
 
 		for e.GetState() < consensus.EngineStateStopping {
 			nextFrame, err := e.dataTimeReel.Head()
@@ -568,12 +571,58 @@ func (e *DataClockConsensusEngine) Start() <-chan error {
 
 			frame = nextFrame
 
-			modulo := len(clients)
+			clientReconnectTest++
+			if clientReconnectTest >= 10 {
+				wg := sync.WaitGroup{}
+				wg.Add(len(e.clients))
+				for i, client := range e.clients {
+					i := i
+					client := client
+					go func() {
+						for j := 3; j >= 0; j-- {
+							var err error
+							if client == nil {
+								if len(e.config.Engine.DataWorkerMultiaddrs) != 0 {
+									e.logger.Error(
+										"client failed, reconnecting after 50ms",
+										zap.Uint32("client", uint32(i)),
+									)
+									time.Sleep(50 * time.Millisecond)
+									client, err = e.createParallelDataClientsFromListAndIndex(uint32(i))
+									if err != nil {
+										e.logger.Error("failed to reconnect", zap.Error(err))
+									}
+								} else if len(e.config.Engine.DataWorkerMultiaddrs) == 0 {
+									e.logger.Error(
+										"client failed, reconnecting after 50ms",
+									)
+									time.Sleep(50 * time.Millisecond)
+									client, err =
+										e.createParallelDataClientsFromBaseMultiaddrAndIndex(uint32(i))
+									if err != nil {
+										e.logger.Error("failed to reconnect", zap.Error(err))
+									}
+								}
+								e.clients[i] = client
+								continue
+							}
+						}
+						wg.Done()
+					}()
+				}
+				wg.Wait()
+				clientReconnectTest = 0
+			}
 
 			for i, trie := range e.GetFrameProverTries()[1:] {
 				if trie.Contains(peerProvingKeyAddress) {
 					e.logger.Info("creating data shard ring proof", zap.Int("ring", i))
-					outputs := e.PerformTimeProof(frame, frame.Difficulty, clients)
+					outputs := e.PerformTimeProof(frame, frame.Difficulty)
+					if outputs == nil {
+						e.logger.Error("could not successfully build proof, reattempting")
+						break
+					}
+					modulo := len(outputs)
 					proofTree, payload, output := tries.PackOutputIntoPayloadAndProof(
 						outputs,
 						modulo,
@@ -655,96 +704,63 @@ func (e *DataClockConsensusEngine) Start() <-chan error {
 func (e *DataClockConsensusEngine) PerformTimeProof(
 	frame *protobufs.ClockFrame,
 	difficulty uint32,
-	clients []protobufs.DataIPCServiceClient,
 ) []mt.DataBlock {
+	type clientInfo struct {
+		client protobufs.DataIPCServiceClient
+		index  int
+	}
+	actives := []clientInfo{}
+	for i, client := range e.clients {
+		i := i
+		client := client
+		if client != nil {
+			actives = append(actives, clientInfo{
+				client: client,
+				index:  i,
+			})
+		}
+	}
+	output := make([]mt.DataBlock, len(actives))
+
 	wg := sync.WaitGroup{}
-	wg.Add(len(clients))
-	output := make([]mt.DataBlock, len(clients))
-	for i, client := range clients {
+	wg.Add(len(actives))
+	for i, client := range actives {
 		i := i
 		client := client
 		go func() {
 			e.logger.Info("performing data proof")
-			for j := 3; j >= 0; j-- {
-				var err error
-				if client == nil {
-					if len(e.config.Engine.DataWorkerMultiaddrs) != 0 {
-						e.logger.Error(
-							"client failed, reconnecting after 50ms",
-							zap.Uint32("client", uint32(i)),
-						)
-						time.Sleep(50 * time.Millisecond)
-						client, err = e.createParallelDataClientsFromListAndIndex(uint32(i))
-						if err != nil {
-							e.logger.Error("failed to reconnect", zap.Error(err))
-						}
-					} else if len(e.config.Engine.DataWorkerMultiaddrs) == 0 {
-						e.logger.Error(
-							"client failed, reconnecting after 50ms",
-						)
-						time.Sleep(50 * time.Millisecond)
-						client, err =
-							e.createParallelDataClientsFromBaseMultiaddrAndIndex(uint32(i))
-						if err != nil {
-							e.logger.Error("failed to reconnect", zap.Error(err))
-						}
-					}
-					clients[i] = client
-					continue
+			resp, err :=
+				client.client.CalculateChallengeProof(
+					context.Background(),
+					&protobufs.ChallengeProofRequest{
+						PeerId:     e.pubSub.GetPeerID(),
+						Core:       uint32(i),
+						ClockFrame: frame,
+					},
+				)
+			if err != nil {
+				if status.Code(err) == codes.NotFound {
+					wg.Done()
+					return
 				}
-				resp, err :=
-					client.CalculateChallengeProof(
-						context.Background(),
-						&protobufs.ChallengeProofRequest{
-							PeerId:     e.pubSub.GetPeerID(),
-							ClockFrame: frame,
-						},
-					)
-				if err != nil {
-					if status.Code(err) == codes.NotFound {
-						break
-					}
-					if j == 0 {
-						e.logger.Error(
-							"unable to get a response in time from worker",
-							zap.Error(err),
-						)
-					}
-					if len(e.config.Engine.DataWorkerMultiaddrs) != 0 {
-						e.logger.Error(
-							"client failed, reconnecting after 50ms",
-							zap.Uint32("client", uint32(i)),
-						)
-						time.Sleep(50 * time.Millisecond)
-						client, err = e.createParallelDataClientsFromListAndIndex(uint32(i))
-						if err != nil {
-							e.logger.Error("failed to reconnect", zap.Error(err))
-						}
-					} else if len(e.config.Engine.DataWorkerMultiaddrs) == 0 {
-						e.logger.Error(
-							"client failed, reconnecting after 50ms",
-						)
-						time.Sleep(50 * time.Millisecond)
-						client, err =
-							e.createParallelDataClientsFromBaseMultiaddrAndIndex(uint32(i))
-						if err != nil {
-							e.logger.Error("failed to reconnect", zap.Error(err))
-						}
-					}
-					clients[i] = client
-					continue
-				}
+			}
 
+			if resp != nil {
 				output[i] = tries.NewProofLeaf(resp.Output)
-				break
+			} else {
+				e.clients[client.index] = nil
 			}
-			if output[i] == nil {
-				output[i] = tries.NewProofLeaf([]byte{})
-			}
+
 			wg.Done()
 		}()
 	}
 	wg.Wait()
+
+	for _, out := range output {
+		if out == nil {
+			return nil
+		}
+	}
 
 	return output
 }
@@ -919,7 +935,10 @@ func (e *DataClockConsensusEngine) createParallelDataClientsFromListAndIndex(
 		return nil, errors.Wrap(err, "create parallel data client")
 	}
 
-	conn, err := grpc.Dial(
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+	conn, err := grpc.DialContext(
+		ctx,
 		addr,
 		grpc.WithTransportCredentials(
 			insecure.NewCredentials(),
@@ -979,7 +998,10 @@ func (
 		return nil, errors.Wrap(err, "create parallel data client")
 	}
 
-	conn, err := grpc.Dial(
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+	conn, err := grpc.DialContext(
+		ctx,
 		addr,
 		grpc.WithTransportCredentials(
 			insecure.NewCredentials(),
@@ -1028,7 +1050,10 @@ func (e *DataClockConsensusEngine) createParallelDataClientsFromList() (
 			continue
 		}
 
-		conn, err := grpc.Dial(
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		defer cancel()
+		conn, err := grpc.DialContext(
+			ctx,
 			addr,
 			grpc.WithTransportCredentials(
 				insecure.NewCredentials(),
@@ -1088,8 +1113,10 @@ func (e *DataClockConsensusEngine) createParallelDataClientsFromBaseMultiaddr(
 			e.logger.Error("could not get dial args", zap.Error(err))
 			continue
 		}
-
-		conn, err := grpc.Dial(
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		defer cancel()
+		conn, err := grpc.DialContext(
+			ctx,
 			addr,
 			grpc.WithTransportCredentials(
 				insecure.NewCredentials(),

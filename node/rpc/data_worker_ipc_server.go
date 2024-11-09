@@ -45,7 +45,7 @@ func (r *DataWorkerIPCServer) CalculateChallengeProof(
 		challenge,
 		req.ClockFrame.FrameNumber,
 	)
-	challenge = binary.BigEndian.AppendUint32(challenge, r.coreId)
+	challenge = binary.BigEndian.AppendUint32(challenge, req.Core)
 	challenge = append(challenge, req.ClockFrame.Output...)
 
 	proof, err := r.prover.CalculateChallengeProof(

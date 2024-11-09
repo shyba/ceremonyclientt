@@ -39,7 +39,6 @@ func (
 
 func (e *DataClockConsensusEngine) runLoop() {
 	dataFrameCh := e.dataTimeReel.NewFrameCh()
-
 	for e.GetState() < consensus.EngineStateStopping {
 		peerCount := e.pubSub.GetNetworkPeersCount()
 		if peerCount < e.minimumPeersRequired {
@@ -79,11 +78,7 @@ func (e *DataClockConsensusEngine) processFrame(
 	)
 	var err error
 	if !e.GetFrameProverTries()[0].Contains(e.provingKeyBytes) {
-		if latestFrame == nil ||
-			dataFrame.FrameNumber > latestFrame.FrameNumber {
-			latestFrame = dataFrame
-		}
-		if latestFrame, err = e.collect(latestFrame); err != nil {
+		if latestFrame, err = e.collect(dataFrame); err != nil {
 			e.logger.Error("could not collect", zap.Error(err))
 		}
 	}
@@ -110,14 +105,14 @@ func (e *DataClockConsensusEngine) processFrame(
 		e.provingKeyAddress,
 	) {
 		var nextFrame *protobufs.ClockFrame
-		if nextFrame, err = e.prove(latestFrame); err != nil {
+		if nextFrame, err = e.prove(dataFrame); err != nil {
 			e.logger.Error("could not prove", zap.Error(err))
 			e.stateMx.Lock()
 			if e.state < consensus.EngineStateStopping {
 				e.state = consensus.EngineStateCollecting
 			}
 			e.stateMx.Unlock()
-			return latestFrame
+			return dataFrame
 		}
 
 		e.dataTimeReel.Insert(nextFrame, true)

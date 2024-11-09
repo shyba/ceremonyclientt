@@ -537,8 +537,8 @@ func (e *TokenExecutionEngine) ProcessFrame(
 		zap.Int("outputs", len(app.TokenOutputs.Outputs)),
 	)
 
-	proverTrieJoinRequests := make(map[string]string)
-	proverTrieLeaveRequests := make(map[string]string)
+	proverTrieJoinRequests := [][]byte{}
+	proverTrieLeaveRequests := [][]byte{}
 
 	for i, output := range app.TokenOutputs.Outputs {
 		switch o := output.Output.(type) {
@@ -626,14 +626,25 @@ func (e *TokenExecutionEngine) ProcessFrame(
 				txn.Abort()
 				return nil, errors.Wrap(err, "process frame")
 			}
-			proverTrieJoinRequests[string(addr)] = string(addr)
+			if _, ok := (*e.peerSeniority)[string(addr)]; !ok {
+				(*e.peerSeniority)[string(addr)] = peerSeniorityItem{
+					seniority: 20,
+					addr:      string(addr),
+				}
+			} else {
+				(*e.peerSeniority)[string(addr)] = peerSeniorityItem{
+					seniority: (*e.peerSeniority)[string(addr)].seniority + 20,
+					addr:      string(addr),
+				}
+			}
+			proverTrieJoinRequests = append(proverTrieJoinRequests, addr)
 		case *protobufs.TokenOutput_Leave:
 			addr, err := e.getAddressFromSignature(o.Leave.PublicKeySignatureEd448)
 			if err != nil {
 				txn.Abort()
 				return nil, errors.Wrap(err, "process frame")
 			}
-			proverTrieLeaveRequests[string(addr)] = string(addr)
+			proverTrieLeaveRequests = append(proverTrieLeaveRequests, addr)
 		case *protobufs.TokenOutput_Pause:
 			_, err := e.getAddressFromSignature(o.Pause.PublicKeySignatureEd448)
 			if err != nil {
@@ -653,7 +664,7 @@ func (e *TokenExecutionEngine) ProcessFrame(
 					seniority: 0,
 					addr:      addr,
 				}
-				proverTrieLeaveRequests[addr] = addr
+				proverTrieLeaveRequests = append(proverTrieLeaveRequests, []byte(addr))
 			} else {
 				if (*e.peerSeniority)[addr].seniority > o.Penalty.Quantity {
 					(*e.peerSeniority)[addr] = peerSeniorityItem{
@@ -665,7 +676,7 @@ func (e *TokenExecutionEngine) ProcessFrame(
 						seniority: 0,
 						addr:      addr,
 					}
-					proverTrieLeaveRequests[addr] = addr
+					proverTrieLeaveRequests = append(proverTrieLeaveRequests, []byte(addr))
 				}
 			}
 		}
@@ -674,23 +685,23 @@ func (e *TokenExecutionEngine) ProcessFrame(
 	joinAddrs := tries.NewMinHeap[peerSeniorityItem]()
 	leaveAddrs := tries.NewMinHeap[peerSeniorityItem]()
 	for _, addr := range proverTrieJoinRequests {
-		if _, ok := (*e.peerSeniority)[addr]; !ok {
+		if _, ok := (*e.peerSeniority)[string(addr)]; !ok {
 			joinAddrs.Push(peerSeniorityItem{
-				addr:      addr,
+				addr:      string(addr),
 				seniority: 0,
 			})
 		} else {
-			joinAddrs.Push((*e.peerSeniority)[addr])
+			joinAddrs.Push((*e.peerSeniority)[string(addr)])
 		}
 	}
 	for _, addr := range proverTrieLeaveRequests {
-		if _, ok := (*e.peerSeniority)[addr]; !ok {
+		if _, ok := (*e.peerSeniority)[string(addr)]; !ok {
 			leaveAddrs.Push(peerSeniorityItem{
-				addr:      addr,
+				addr:      string(addr),
 				seniority: 0,
 			})
 		} else {
-			leaveAddrs.Push((*e.peerSeniority)[addr])
+			leaveAddrs.Push((*e.peerSeniority)[string(addr)])
 		}
 	}
 
