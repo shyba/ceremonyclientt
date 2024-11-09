@@ -21,6 +21,9 @@ type EngineConfig struct {
 	MultisigProverEnrollmentPaths []string `yaml:"multisigProverEnrollmentPaths"`
 	// Does not verify execution, enables light provers
 	LightNode bool
+	// Automatically merges coins after minting once a sufficient number has been
+	// accrued
+	AutoMergeCoins bool
 
 	// Values used only for testing – do not override these in production, your
 	// node will get kicked out

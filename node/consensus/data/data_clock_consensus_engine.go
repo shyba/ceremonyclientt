@@ -616,8 +616,7 @@ func (e *DataClockConsensusEngine) Start() <-chan error {
 
 			for i, trie := range e.GetFrameProverTries()[1:] {
 				if trie.Contains(peerProvingKeyAddress) {
-					e.logger.Info("creating data shard ring proof", zap.Int("ring", i))
-					outputs := e.PerformTimeProof(frame, frame.Difficulty)
+					outputs := e.PerformTimeProof(frame, frame.Difficulty, i)
 					if outputs == nil || len(outputs) < 3 {
 						e.logger.Error("could not successfully build proof, reattempting")
 						break
@@ -659,44 +658,46 @@ func (e *DataClockConsensusEngine) Start() <-chan error {
 						},
 					})
 
-					_, addrs, _, err := e.coinStore.GetCoinsForOwner(
-						peerProvingKeyAddress,
-					)
-					if err != nil {
-						e.logger.Error(
-							"received error while iterating coins",
-							zap.Error(err),
+					if e.config.Engine.AutoMergeCoins {
+						_, addrs, _, err := e.coinStore.GetCoinsForOwner(
+							peerProvingKeyAddress,
 						)
-						break
-					}
-
-					if len(addrs) > 10 {
-						message := []byte("merge")
-						refs := []*protobufs.CoinRef{}
-						for _, addr := range addrs {
-							message = append(message, addr...)
-							refs = append(refs, &protobufs.CoinRef{
-								Address: addr,
-							})
+						if err != nil {
+							e.logger.Error(
+								"received error while iterating coins",
+								zap.Error(err),
+							)
+							break
 						}
 
-						sig, _ := e.pubSub.SignMessage(
-							message,
-						)
+						if len(addrs) > 25 {
+							message := []byte("merge")
+							refs := []*protobufs.CoinRef{}
+							for _, addr := range addrs {
+								message = append(message, addr...)
+								refs = append(refs, &protobufs.CoinRef{
+									Address: addr,
+								})
+							}
 
-						e.publishMessage(e.txFilter, &protobufs.TokenRequest{
-							Request: &protobufs.TokenRequest_Merge{
-								Merge: &protobufs.MergeCoinRequest{
-									Coins: refs,
-									Signature: &protobufs.Ed448Signature{
-										PublicKey: &protobufs.Ed448PublicKey{
-											KeyValue: e.pubSub.GetPublicKey(),
+							sig, _ := e.pubSub.SignMessage(
+								message,
+							)
+
+							e.publishMessage(e.txFilter, &protobufs.TokenRequest{
+								Request: &protobufs.TokenRequest_Merge{
+									Merge: &protobufs.MergeCoinRequest{
+										Coins: refs,
+										Signature: &protobufs.Ed448Signature{
+											PublicKey: &protobufs.Ed448PublicKey{
+												KeyValue: e.pubSub.GetPublicKey(),
+											},
+											Signature: sig,
 										},
-										Signature: sig,
 									},
 								},
-							},
-						})
+							})
+						}
 					}
 
 					break
@@ -711,6 +712,7 @@ func (e *DataClockConsensusEngine) Start() <-chan error {
 func (e *DataClockConsensusEngine) PerformTimeProof(
 	frame *protobufs.ClockFrame,
 	difficulty uint32,
+	ring int,
 ) []mt.DataBlock {
 	type clientInfo struct {
 		client protobufs.DataIPCServiceClient
@@ -728,6 +730,11 @@ func (e *DataClockConsensusEngine) PerformTimeProof(
 		}
 	}
 	output := make([]mt.DataBlock, len(actives))
+	e.logger.Info(
+		"creating data shard ring proof",
+		zap.Int("ring", ring),
+		zap.Int("active_workers", len(actives)),
+	)
 
 	wg := sync.WaitGroup{}
 	wg.Add(len(actives))
