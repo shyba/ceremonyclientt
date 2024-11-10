@@ -56,9 +56,6 @@ type peerInfo struct {
 	timestamp     int64
 	lastSeen      int64
 	version       []byte
-	signature     []byte
-	publicKey     []byte
-	direct        bool
 	totalDistance []byte
 }
 
@@ -415,8 +412,18 @@ func (e *DataClockConsensusEngine) Start() <-chan error {
 
 			frame = nextFrame
 
+			timestamp := time.Now().UnixMilli()
 			list := &protobufs.DataPeerListAnnounce{
-				PeerList: []*protobufs.DataPeer{},
+				Peer: &protobufs.DataPeer{
+					PeerId:    nil,
+					Multiaddr: "",
+					MaxFrame:  frame.FrameNumber,
+					Version:   config.GetVersion(),
+					Timestamp: timestamp,
+					TotalDistance: e.dataTimeReel.GetTotalDistance().FillBytes(
+						make([]byte, 256),
+					),
+				},
 			}
 
 			e.latestFrameReceived = frame.FrameNumber
@@ -425,41 +432,18 @@ func (e *DataClockConsensusEngine) Start() <-chan error {
 				zap.Uint64("frame_number", frame.FrameNumber),
 			)
 
-			timestamp := time.Now().UnixMilli()
-			msg := binary.BigEndian.AppendUint64([]byte{}, frame.FrameNumber)
-			msg = append(msg, config.GetVersion()...)
-			msg = binary.BigEndian.AppendUint64(msg, uint64(timestamp))
-			sig, err := e.pubSub.SignMessage(msg)
-			if err != nil {
-				panic(err)
-			}
-
 			e.peerMapMx.Lock()
 			e.peerMap[string(e.pubSub.GetPeerID())] = &peerInfo{
 				peerId:    e.pubSub.GetPeerID(),
 				multiaddr: "",
 				maxFrame:  frame.FrameNumber,
 				version:   config.GetVersion(),
-				signature: sig,
-				publicKey: e.pubSub.GetPublicKey(),
 				timestamp: timestamp,
 				totalDistance: e.dataTimeReel.GetTotalDistance().FillBytes(
 					make([]byte, 256),
 				),
 			}
 			deletes := []*peerInfo{}
-			list.PeerList = append(list.PeerList, &protobufs.DataPeer{
-				PeerId:    e.pubSub.GetPeerID(),
-				Multiaddr: "",
-				MaxFrame:  frame.FrameNumber,
-				Version:   config.GetVersion(),
-				Signature: sig,
-				PublicKey: e.pubSub.GetPublicKey(),
-				Timestamp: timestamp,
-				TotalDistance: e.dataTimeReel.GetTotalDistance().FillBytes(
-					make([]byte, 256),
-				),
-			})
 			for _, v := range e.peerMap {
 				if v == nil {
 					continue
@@ -875,8 +859,6 @@ func (
 			MaxFrame:      v.maxFrame,
 			Timestamp:     v.timestamp,
 			Version:       v.version,
-			Signature:     v.signature,
-			PublicKey:     v.publicKey,
 			TotalDistance: v.totalDistance,
 		})
 	}
@@ -889,8 +871,6 @@ func (
 				MaxFrame:      v.maxFrame,
 				Timestamp:     v.timestamp,
 				Version:       v.version,
-				Signature:     v.signature,
-				PublicKey:     v.publicKey,
 				TotalDistance: v.totalDistance,
 			},
 		)
