@@ -46,6 +46,10 @@ func (a *TokenApplication) handleDataAnnounceProverJoin(
 	[]*protobufs.TokenOutput,
 	error,
 ) {
+	if currentFrameNumber < PROOF_FRAME_CUTOFF {
+		return nil, errors.Wrap(ErrInvalidStateTransition, "handle join")
+	}
+
 	payload := []byte("join")
 
 	if t == nil || t.PublicKeySignatureEd448 == nil {

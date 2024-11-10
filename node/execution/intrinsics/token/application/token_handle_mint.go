@@ -18,11 +18,14 @@ import (
 	"source.quilibrium.com/quilibrium/monorepo/node/tries"
 )
 
+const PROOF_FRAME_CUTOFF = 46500
+
 func (a *TokenApplication) handleMint(
 	currentFrameNumber uint64,
 	lockMap map[string]struct{},
 	t *protobufs.MintCoinRequest,
 	frame *protobufs.ClockFrame,
+	parallelismMap map[int]uint64,
 ) ([]*protobufs.TokenOutput, error) {
 	if t == nil || t.Proofs == nil || t.Signature == nil {
 		return nil, errors.Wrap(ErrInvalidStateTransition, "handle mint")
@@ -119,7 +122,7 @@ func (a *TokenApplication) handleMint(
 			},
 		}
 		return outputs, nil
-	} else if len(t.Proofs) > 0 && currentFrameNumber > 0 {
+	} else if len(t.Proofs) > 0 && currentFrameNumber > PROOF_FRAME_CUTOFF {
 		a.Logger.Debug(
 			"got mint from peer",
 			zap.String("peer_id", base58.Encode([]byte(peerId))),
@@ -134,7 +137,6 @@ func (a *TokenApplication) handleMint(
 			return nil, errors.Wrap(ErrInvalidStateTransition, "handle mint")
 		}
 		ring := -1
-		proverSet := int64((len(a.Tries) - 1) * 1024)
 		for i, t := range a.Tries[1:] {
 			if t.Contains(altAddr.FillBytes(make([]byte, 32))) {
 				ring = i
@@ -232,8 +234,12 @@ func (a *TokenApplication) handleMint(
 			)
 		}
 
+		// Current frame - 2 is because the current frame is the newly created frame,
+		// and the provers are submitting proofs on the frame preceding the one they
+		// last saw. This enforces liveness and creates a punishment for being
+		// late.
 		if (previousFrame != nil && newFrameNumber <= previousFrame.FrameNumber) ||
-			newFrameNumber < currentFrameNumber-10 {
+			newFrameNumber < currentFrameNumber-2 {
 			previousFrameNumber := uint64(0)
 			if previousFrame != nil {
 				previousFrameNumber = previousFrame.FrameNumber
@@ -349,15 +355,9 @@ func (a *TokenApplication) handleMint(
 			)
 		}
 		if verified && delete != nil && len(t.Proofs) > 3 {
-			ringFactor := big.NewInt(2)
-			ringFactor.Exp(ringFactor, big.NewInt(int64(ring)), nil)
-
-			// const for testnet
-			storage := big.NewInt(int64(256 * parallelism))
-			unitFactor := big.NewInt(8000000000)
-			storage.Mul(storage, unitFactor)
-			storage.Quo(storage, big.NewInt(proverSet))
-			storage.Quo(storage, ringFactor)
+			storage := PomwBasis(1, ring, currentFrameNumber)
+			storage.Quo(storage, big.NewInt(int64(parallelismMap[ring])))
+			storage.Mul(storage, big.NewInt(int64(parallelism)))
 
 			a.Logger.Debug(
 				"issued reward",
@@ -457,4 +457,53 @@ func (a *TokenApplication) handleMint(
 		zap.Uint64("frame_number", currentFrameNumber),
 	)
 	return nil, errors.Wrap(ErrInvalidStateTransition, "handle mint")
+}
+
+func PomwBasis(generation uint64, ring int, currentFrameNumber uint64) *big.Int {
+	prec := uint(53)
+
+	one := new(big.Float).SetPrec(prec).SetInt64(1)
+	divisor := new(big.Float).SetPrec(prec).SetInt64(1048576)
+
+	normalized := new(big.Float).SetPrec(prec)
+	// A simple hack for estimating state growth in terms of frames, based on
+	// linear relationship of state growth:
+	normalized.SetInt64(int64((737280 + currentFrameNumber) / 184320))
+	normalized.Quo(normalized, divisor)
+
+	// 1/2^n
+	exp := new(big.Float).SetPrec(prec).SetInt64(1)
+	if generation > 0 {
+		powerOfTwo := new(big.Float).SetPrec(prec).SetInt64(2)
+		powerOfTwo.SetInt64(1)
+		for i := uint64(0); i < generation; i++ {
+			powerOfTwo.Mul(powerOfTwo, big.NewFloat(2))
+		}
+		exp.Quo(one, powerOfTwo)
+	}
+
+	// (d/1048576)^(1/2^n)
+	result := new(big.Float).Copy(normalized)
+	if generation > 0 {
+		for i := uint64(0); i < generation; i++ {
+			result.Sqrt(result)
+		}
+	}
+
+	// Calculate 1/result
+	result.Quo(one, result)
+
+	// Divide by 2^s
+	if ring > 0 {
+		divisor := new(big.Float).SetPrec(prec).SetInt64(1)
+		for i := 0; i < ring; i++ {
+			divisor.Mul(divisor, big.NewFloat(2))
+		}
+		result.Quo(result, divisor)
+	}
+
+	result.Mul(result, new(big.Float).SetPrec(prec).SetInt64(8000000000))
+
+	out, _ := result.Int(new(big.Int))
+	return out
 }

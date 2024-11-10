@@ -89,12 +89,13 @@ func TestPackAndVerifyOutput(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			tree, payload, output := tries.PackOutputIntoPayloadAndProof(
+			tree, payload, output, err := tries.PackOutputIntoPayloadAndProof(
 				outputs,
 				tc.modulo,
 				frame,
 				previousTree,
 			)
+			require.NoError(t, err)
 			require.NotNil(t, tree)
 			require.NotEmpty(t, payload)
 			require.NotEmpty(t, output)

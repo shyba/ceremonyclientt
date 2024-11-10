@@ -15,6 +15,10 @@ func (a *TokenApplication) handleDataAnnounceProverPause(
 	[]*protobufs.TokenOutput,
 	error,
 ) {
+	if currentFrameNumber < PROOF_FRAME_CUTOFF {
+		return nil, errors.Wrap(ErrInvalidStateTransition, "handle pause")
+	}
+
 	payload := []byte("pause")
 
 	if t == nil || t.PublicKeySignatureEd448 == nil {

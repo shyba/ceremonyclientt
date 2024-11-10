@@ -15,6 +15,10 @@ func (a *TokenApplication) handleDataAnnounceProverLeave(
 	[]*protobufs.TokenOutput,
 	error,
 ) {
+	if currentFrameNumber < PROOF_FRAME_CUTOFF {
+		return nil, errors.Wrap(ErrInvalidStateTransition, "handle leave")
+	}
+
 	payload := []byte("leave")
 
 	if t == nil || t.PublicKeySignatureEd448 == nil {
