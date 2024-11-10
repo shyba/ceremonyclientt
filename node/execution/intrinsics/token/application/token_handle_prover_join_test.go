@@ -176,12 +176,13 @@ func TestHandleProverJoin(t *testing.T) {
 	fmt.Printf("%x\n", individualChallenge)
 	out2, _ := wprover.CalculateChallengeProof(individualChallenge, 10000)
 
-	proofTree, payload, output := tries.PackOutputIntoPayloadAndProof(
+	proofTree, payload, output, err := tries.PackOutputIntoPayloadAndProof(
 		[]merkletree.DataBlock{tries.NewProofLeaf(out1), tries.NewProofLeaf(out2)},
 		2,
 		frame2,
 		nil,
 	)
+	assert.NoError(t, err)
 
 	sig, _ = privKey.Sign(payload)
 	app, success, _, err = app.ApplyTransitions(2, &protobufs.TokenRequests{
@@ -240,12 +241,13 @@ func TestHandleProverJoin(t *testing.T) {
 	app.ClockStore.CommitDataClockFrame(frame3.Filter, 3, selbi.FillBytes(make([]byte, 32)), app.Tries, txn, false)
 	txn.Commit()
 
-	proofTree, payload, output = tries.PackOutputIntoPayloadAndProof(
+	proofTree, payload, output, err = tries.PackOutputIntoPayloadAndProof(
 		[]merkletree.DataBlock{tries.NewProofLeaf(out1), tries.NewProofLeaf(out2)},
 		2,
 		frame3,
 		proofTree,
 	)
+	assert.NoError(t, err)
 
 	sig, _ = privKey.Sign(payload)
 	app, success, _, err = app.ApplyTransitions(3, &protobufs.TokenRequests{

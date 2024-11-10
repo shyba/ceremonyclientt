@@ -1,7 +1,6 @@
 package data
 
 import (
-	"bytes"
 	"context"
 	"crypto"
 	"encoding/binary"
@@ -11,8 +10,6 @@ import (
 	"time"
 
 	"github.com/iden3/go-iden3-crypto/poseidon"
-	pcrypto "github.com/libp2p/go-libp2p/core/crypto"
-	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/p2p/discovery/backoff"
 	"github.com/multiformats/go-multiaddr"
 	mn "github.com/multiformats/go-multiaddr/net"
@@ -101,7 +98,6 @@ type DataClockConsensusEngine struct {
 	currentReceivingSyncPeersMx sync.Mutex
 	currentReceivingSyncPeers   int
 	announcedJoin               int
-	beaconPeerId                []byte
 
 	frameChan                      chan *protobufs.ClockFrame
 	executionEngines               map[string]execution.ExecutionEngine
@@ -201,17 +197,6 @@ func NewDataClockConsensusEngine(
 		panic(errors.New("peer info manager is nil"))
 	}
 
-	genesis := config.GetGenesis()
-	beaconPubKey, err := pcrypto.UnmarshalEd448PublicKey(genesis.Beacon)
-	if err != nil {
-		panic(err)
-	}
-
-	beaconPeerId, err := peer.IDFromPublicKey(beaconPubKey)
-	if err != nil {
-		panic(err)
-	}
-
 	minimumPeersRequired := cfg.Engine.MinimumPeersRequired
 	if minimumPeersRequired == 0 {
 		minimumPeersRequired = 3
@@ -259,7 +244,6 @@ func NewDataClockConsensusEngine(
 		infoMessageProcessorCh:    make(chan *pb.Message),
 		config:                    cfg,
 		preMidnightMint:           map[string]struct{}{},
-		beaconPeerId:              []byte(beaconPeerId),
 	}
 
 	logger.Info("constructing consensus engine")
@@ -395,20 +379,6 @@ func (e *DataClockConsensusEngine) Start() <-chan error {
 
 			if frame.FrameNumber-100 >= nextFrame.FrameNumber ||
 				nextFrame.FrameNumber == 0 {
-				time.Sleep(120 * time.Second)
-				continue
-			}
-
-			e.peerMapMx.RLock()
-			beaconInfo, ok := e.peerMap[string(e.beaconPeerId)]
-			if !ok {
-				e.peerMapMx.RUnlock()
-				time.Sleep(120 * time.Second)
-				continue
-			}
-			e.peerMapMx.RUnlock()
-
-			if nextFrame.FrameNumber < beaconInfo.maxFrame-100 {
 				time.Sleep(120 * time.Second)
 				continue
 			}
@@ -1154,30 +1124,4 @@ func (e *DataClockConsensusEngine) createParallelDataClientsFromBaseMultiaddr(
 		zap.Int("parallelism", parallelism),
 	)
 	return clients, nil
-}
-
-func (e *DataClockConsensusEngine) announceProverJoin() {
-	msg := []byte("join")
-	head, _ := e.dataTimeReel.Head()
-	msg = binary.BigEndian.AppendUint64(msg, head.FrameNumber)
-	msg = append(msg, bytes.Repeat([]byte{0xff}, 32)...)
-	sig, err := e.pubSub.SignMessage(msg)
-	if err != nil {
-		panic(err)
-	}
-
-	e.publishMessage(e.txFilter, &protobufs.TokenRequest{
-		Request: &protobufs.TokenRequest_Join{
-			Join: &protobufs.AnnounceProverJoin{
-				Filter:      bytes.Repeat([]byte{0xff}, 32),
-				FrameNumber: head.FrameNumber,
-				PublicKeySignatureEd448: &protobufs.Ed448Signature{
-					Signature: sig,
-					PublicKey: &protobufs.Ed448PublicKey{
-						KeyValue: e.pubSub.GetPublicKey(),
-					},
-				},
-			},
-		},
-	})
 }

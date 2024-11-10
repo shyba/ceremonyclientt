@@ -75,25 +75,140 @@ var thirdRetroJsonBinary []byte
 //go:embed fourth_retro.json
 var fourthRetroJsonBinary []byte
 
-func RebuildPeerSeniority(clockStore store.ClockStore) {
-	// testnet:
-	txn, err := clockStore.NewTransaction()
+var firstRetro []*FirstRetroJson
+var secondRetro []*SecondRetroJson
+var thirdRetro []*ThirdRetroJson
+var fourthRetro []*FourthRetroJson
+
+func LoadAggregatedSeniorityMap() {
+	firstRetro = []*FirstRetroJson{}
+	secondRetro = []*SecondRetroJson{}
+	thirdRetro = []*ThirdRetroJson{}
+	fourthRetro = []*FourthRetroJson{}
+
+	err := json.Unmarshal(firstRetroJsonBinary, &firstRetro)
 	if err != nil {
 		panic(err)
 	}
 
-	err = clockStore.PutPeerSeniorityMap(
-		txn,
-		p2p.GetBloomFilter(application.TOKEN_ADDRESS, 256, 3),
-		map[string]uint64{},
-	)
+	err = json.Unmarshal(secondRetroJsonBinary, &secondRetro)
 	if err != nil {
 		panic(err)
 	}
 
-	if err = txn.Commit(); err != nil {
+	err = json.Unmarshal(thirdRetroJsonBinary, &thirdRetro)
+	if err != nil {
 		panic(err)
 	}
+
+	err = json.Unmarshal(fourthRetroJsonBinary, &fourthRetro)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func RebuildPeerSeniority(network uint) (map[string]uint64, error) {
+	if network != 0 {
+		return map[string]uint64{}, nil
+	}
+
+	firstRetro = []*FirstRetroJson{}
+	secondRetro = []*SecondRetroJson{}
+	thirdRetro = []*ThirdRetroJson{}
+	fourthRetro = []*FourthRetroJson{}
+
+	err := json.Unmarshal(firstRetroJsonBinary, &firstRetro)
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(secondRetroJsonBinary, &secondRetro)
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(thirdRetroJsonBinary, &thirdRetro)
+	if err != nil {
+		return nil, err
+	}
+
+	err = json.Unmarshal(fourthRetroJsonBinary, &fourthRetro)
+	if err != nil {
+		return nil, err
+	}
+
+	peerSeniority := map[string]uint64{}
+	for _, f := range firstRetro {
+		// these don't have decimals so we can shortcut
+		max := 157208
+		actual, err := strconv.Atoi(f.Reward)
+		if err != nil {
+			return nil, err
+		}
+
+		p := []byte(f.PeerId)
+		addr, _ := poseidon.HashBytes(p)
+
+		peerSeniority[string(
+			addr.FillBytes(make([]byte, 32)),
+		)] = uint64(10 * 6 * 60 * 24 * 92 / (max / actual))
+	}
+
+	for _, f := range secondRetro {
+		p := []byte(f.PeerId)
+		addr, _ := poseidon.HashBytes(p)
+		addrBytes := string(addr.FillBytes(make([]byte, 32)))
+
+		if _, ok := peerSeniority[addrBytes]; !ok {
+			peerSeniority[addrBytes] = 0
+		}
+
+		if f.JanPresence {
+			peerSeniority[addrBytes] = peerSeniority[addrBytes] + (10 * 6 * 60 * 24 * 31)
+		}
+
+		if f.FebPresence {
+			peerSeniority[addrBytes] = peerSeniority[addrBytes] + (10 * 6 * 60 * 24 * 29)
+		}
+
+		if f.MarPresence {
+			peerSeniority[addrBytes] = peerSeniority[addrBytes] + (10 * 6 * 60 * 24 * 31)
+		}
+
+		if f.AprPresence {
+			peerSeniority[addrBytes] = peerSeniority[addrBytes] + (10 * 6 * 60 * 24 * 30)
+		}
+
+		if f.MayPresence {
+			peerSeniority[addrBytes] = peerSeniority[addrBytes] + (10 * 6 * 60 * 24 * 31)
+		}
+	}
+
+	for _, f := range thirdRetro {
+		p := []byte(f.PeerId)
+		addr, _ := poseidon.HashBytes(p)
+		addrBytes := string(addr.FillBytes(make([]byte, 32)))
+
+		if _, ok := peerSeniority[addrBytes]; !ok {
+			peerSeniority[addrBytes] = 0
+		}
+
+		peerSeniority[addrBytes] = peerSeniority[addrBytes] + (10 * 6 * 60 * 24 * 30)
+	}
+
+	for _, f := range fourthRetro {
+		p := []byte(f.PeerId)
+		addr, _ := poseidon.HashBytes(p)
+		addrBytes := string(addr.FillBytes(make([]byte, 32)))
+
+		if _, ok := peerSeniority[addrBytes]; !ok {
+			peerSeniority[addrBytes] = 0
+		}
+
+		peerSeniority[addrBytes] = peerSeniority[addrBytes] + (10 * 6 * 60 * 24 * 31)
+	}
+
+	return peerSeniority, nil
 }
 
 // Creates a genesis state for the intrinsic
@@ -147,10 +262,10 @@ func CreateGenesisState(
 	if network == 0 {
 		bridged := []*BridgedPeerJson{}
 		vouchers := []string{}
-		firstRetro := []*FirstRetroJson{}
-		secondRetro := []*SecondRetroJson{}
-		thirdRetro := []*ThirdRetroJson{}
-		fourthRetro := []*FourthRetroJson{}
+		firstRetro = []*FirstRetroJson{}
+		secondRetro = []*SecondRetroJson{}
+		thirdRetro = []*ThirdRetroJson{}
+		fourthRetro = []*FourthRetroJson{}
 
 		err = json.Unmarshal(bridgedPeersJsonBinary, &bridged)
 		if err != nil {
@@ -200,6 +315,9 @@ func CreateGenesisState(
 		peerSeniority := map[string]uint64{}
 		logger.Info("encoding first retro state")
 		for _, f := range firstRetro {
+			p := []byte(f.PeerId)
+			addr, _ := poseidon.HashBytes(p)
+			addrBytes := string(addr.FillBytes(make([]byte, 32)))
 			if _, ok := bridgedAddrs[f.PeerId]; !ok {
 				peerIdTotals[f.PeerId], err = decimal.NewFromString(f.Reward)
 				if err != nil {
@@ -214,7 +332,7 @@ func CreateGenesisState(
 				panic(err)
 			}
 
-			peerSeniority[f.PeerId] = uint64(10 * 6 * 60 * 24 * 92 / (max / actual))
+			peerSeniority[addrBytes] = uint64(10 * 6 * 60 * 24 * 92 / (max / actual))
 		}
 
 		logger.Info("encoding voucher state")
@@ -226,6 +344,10 @@ func CreateGenesisState(
 
 		logger.Info("encoding second retro state")
 		for _, f := range secondRetro {
+			p := []byte(f.PeerId)
+			addr, _ := poseidon.HashBytes(p)
+			addrBytes := string(addr.FillBytes(make([]byte, 32)))
+
 			if _, ok := bridgedAddrs[f.PeerId]; !ok {
 				existing, ok := peerIdTotals[f.PeerId]
 
@@ -241,33 +363,37 @@ func CreateGenesisState(
 				}
 			}
 
-			if _, ok := peerSeniority[f.PeerId]; !ok {
-				peerSeniority[f.PeerId] = 0
+			if _, ok := peerSeniority[addrBytes]; !ok {
+				peerSeniority[addrBytes] = 0
 			}
 
 			if f.JanPresence {
-				peerSeniority[f.PeerId] = peerSeniority[f.PeerId] + (10 * 6 * 60 * 24 * 31)
+				peerSeniority[addrBytes] = peerSeniority[addrBytes] + (10 * 6 * 60 * 24 * 31)
 			}
 
 			if f.FebPresence {
-				peerSeniority[f.PeerId] = peerSeniority[f.PeerId] + (10 * 6 * 60 * 24 * 29)
+				peerSeniority[addrBytes] = peerSeniority[addrBytes] + (10 * 6 * 60 * 24 * 29)
 			}
 
 			if f.MarPresence {
-				peerSeniority[f.PeerId] = peerSeniority[f.PeerId] + (10 * 6 * 60 * 24 * 31)
+				peerSeniority[addrBytes] = peerSeniority[addrBytes] + (10 * 6 * 60 * 24 * 31)
 			}
 
 			if f.AprPresence {
-				peerSeniority[f.PeerId] = peerSeniority[f.PeerId] + (10 * 6 * 60 * 24 * 30)
+				peerSeniority[addrBytes] = peerSeniority[addrBytes] + (10 * 6 * 60 * 24 * 30)
 			}
 
 			if f.MayPresence {
-				peerSeniority[f.PeerId] = peerSeniority[f.PeerId] + (10 * 6 * 60 * 24 * 31)
+				peerSeniority[addrBytes] = peerSeniority[addrBytes] + (10 * 6 * 60 * 24 * 31)
 			}
 		}
 
 		logger.Info("encoding third retro state")
 		for _, f := range thirdRetro {
+			p := []byte(f.PeerId)
+			addr, _ := poseidon.HashBytes(p)
+			addrBytes := string(addr.FillBytes(make([]byte, 32)))
+
 			existing, ok := peerIdTotals[f.PeerId]
 
 			amount, err := decimal.NewFromString(f.Reward)
@@ -281,15 +407,19 @@ func CreateGenesisState(
 				peerIdTotals[f.PeerId] = existing.Add(amount)
 			}
 
-			if _, ok := peerSeniority[f.PeerId]; !ok {
-				peerSeniority[f.PeerId] = 0
+			if _, ok := peerSeniority[addrBytes]; !ok {
+				peerSeniority[addrBytes] = 0
 			}
 
-			peerSeniority[f.PeerId] = peerSeniority[f.PeerId] + (10 * 6 * 60 * 24 * 30)
+			peerSeniority[addrBytes] = peerSeniority[addrBytes] + (10 * 6 * 60 * 24 * 30)
 		}
 
 		logger.Info("encoding fourth retro state")
 		for _, f := range fourthRetro {
+			p := []byte(f.PeerId)
+			addr, _ := poseidon.HashBytes(p)
+			addrBytes := string(addr.FillBytes(make([]byte, 32)))
+
 			existing, ok := peerIdTotals[f.PeerId]
 
 			amount, err := decimal.NewFromString(f.Reward)
@@ -303,11 +433,11 @@ func CreateGenesisState(
 				peerIdTotals[f.PeerId] = existing.Add(amount)
 			}
 
-			if _, ok := peerSeniority[f.PeerId]; !ok {
-				peerSeniority[f.PeerId] = 0
+			if _, ok := peerSeniority[addrBytes]; !ok {
+				peerSeniority[addrBytes] = 0
 			}
 
-			peerSeniority[f.PeerId] = peerSeniority[f.PeerId] + (10 * 6 * 60 * 24 * 31)
+			peerSeniority[addrBytes] = peerSeniority[addrBytes] + (10 * 6 * 60 * 24 * 31)
 		}
 
 		genesisState := &protobufs.TokenOutputs{

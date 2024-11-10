@@ -16,7 +16,8 @@ func (a *TokenApplication) handleAnnounce(
 	var primary *protobufs.Ed448Signature
 	payload := []byte{}
 
-	if t == nil || t.PublicKeySignaturesEd448 == nil {
+	if t == nil || t.PublicKeySignaturesEd448 == nil ||
+		len(t.PublicKeySignaturesEd448) == 0 {
 		return nil, errors.Wrap(ErrInvalidStateTransition, "handle announce")
 	}
 	for i, p := range t.PublicKeySignaturesEd448 {
@@ -44,11 +45,18 @@ func (a *TokenApplication) handleAnnounce(
 		return nil, errors.Wrap(ErrInvalidStateTransition, "handle announce")
 	}
 
-	for _, p := range t.PublicKeySignaturesEd448 {
+	for _, p := range t.PublicKeySignaturesEd448[1:] {
 		lockMap[string(p.PublicKey.KeyValue)] = struct{}{}
 	}
 
 	outputs := []*protobufs.TokenOutput{}
+	if currentFrameNumber >= PROOF_FRAME_CUTOFF {
+		outputs = append(outputs, &protobufs.TokenOutput{
+			Output: &protobufs.TokenOutput_Announce{
+				Announce: t,
+			},
+		})
+	}
 
 	return outputs, nil
 }

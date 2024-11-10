@@ -83,8 +83,7 @@ func (e *DataClockConsensusEngine) processFrame(
 		}
 	}
 
-	if latestFrame != nil &&
-		dataFrame.FrameNumber > latestFrame.FrameNumber {
+	if latestFrame != nil && dataFrame.FrameNumber > latestFrame.FrameNumber {
 		latestFrame = dataFrame
 	}
 
@@ -131,7 +130,11 @@ func (e *DataClockConsensusEngine) processFrame(
 		if !e.IsInProverTrie(e.pubSub.GetPeerID()) &&
 			dataFrame.Timestamp > time.Now().UnixMilli()-30000 {
 			e.logger.Info("announcing prover join")
-			e.announceProverJoin()
+			for _, eng := range e.executionEngines {
+				eng.AnnounceProverMerge()
+				eng.AnnounceProverJoin()
+				break
+			}
 		}
 		return latestFrame
 	}

@@ -139,6 +139,41 @@ func (a *TokenApplication) ApplyTransitions(
 		requests = transitions.Requests
 	}
 
+	parallelismMap := map[int]uint64{}
+	for i := range a.Tries[1:] {
+		parallelismMap[i] = 0
+	}
+
+	seen := map[string]struct{}{}
+
+	for _, transition := range requests {
+		switch t := transition.Request.(type) {
+		case *protobufs.TokenRequest_Mint:
+			ring, parallelism, err := t.Mint.RingAndParallelism(
+				func(addr []byte) int {
+					if _, ok := seen[string(addr)]; ok {
+						return -1
+					}
+
+					ring := -1
+					for i, t := range a.Tries[1:] {
+						if t.Contains(addr) {
+							ring = i
+							seen[string(addr)] = struct{}{}
+						}
+					}
+
+					return ring
+				},
+			)
+			if err != nil {
+				continue
+			}
+
+			parallelismMap[ring] = parallelismMap[ring] + uint64(parallelism)
+		}
+	}
+
 	for _, transition := range requests {
 	req:
 		switch t := transition.Request.(type) {
@@ -319,7 +354,13 @@ func (a *TokenApplication) ApplyTransitions(
 				transition,
 			)
 		case *protobufs.TokenRequest_Mint:
-			success, err := a.handleMint(currentFrameNumber, lockMap, t.Mint, frame)
+			success, err := a.handleMint(
+				currentFrameNumber,
+				lockMap,
+				t.Mint,
+				frame,
+				parallelismMap,
+			)
 			if err != nil {
 				if !skipFailures {
 					return nil, nil, nil, errors.Wrap(
