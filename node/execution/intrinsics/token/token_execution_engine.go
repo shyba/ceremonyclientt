@@ -835,8 +835,8 @@ func ProcessJoinsAndLeaves(
 	}
 
 	if frame.FrameNumber > application.PROOF_FRAME_RING_RESET {
-		if len(app.Tries) > 2 {
-			for _, t := range app.Tries[2:] {
+		if len(app.Tries) >= 2 {
+			for _, t := range app.Tries[1:] {
 				nodes := t.FindNearestAndApproximateNeighbors(make([]byte, 32))
 				for _, n := range nodes {
 					if n.External.LatestFrame < frame.FrameNumber-1000 {
