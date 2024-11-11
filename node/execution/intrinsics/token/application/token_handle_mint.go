@@ -256,6 +256,7 @@ func (a *TokenApplication) handleMint(
 			return nil, errors.Wrap(ErrInvalidStateTransition, "handle mint")
 		}
 
+		wesoVerified := true
 		if verified && delete != nil && len(t.Proofs) > 3 {
 			newFrame, _, err := a.ClockStore.GetDataClockFrame(
 				frame.Filter,
@@ -339,7 +340,7 @@ func (a *TokenApplication) handleMint(
 					zap.Uint64("frame_number", currentFrameNumber),
 				)
 				// we want this to still apply the next commit even if this proof failed
-				verified = false
+				wesoVerified = false
 			}
 		}
 
@@ -355,7 +356,7 @@ func (a *TokenApplication) handleMint(
 				},
 			)
 		}
-		if verified && delete != nil && len(t.Proofs) > 3 {
+		if verified && delete != nil && len(t.Proofs) > 3 && wesoVerified {
 			storage := PomwBasis(1, ring, currentFrameNumber)
 			storage.Quo(storage, big.NewInt(int64(parallelismMap[ring])))
 			storage.Mul(storage, big.NewInt(int64(parallelism)))
@@ -431,7 +432,7 @@ func (a *TokenApplication) handleMint(
 					},
 				},
 			)
-			if !verified {
+			if !wesoVerified {
 				outputs = append(outputs, &protobufs.TokenOutput{
 					Output: &protobufs.TokenOutput_Penalty{
 						Penalty: &protobufs.ProverPenalty{
