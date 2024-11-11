@@ -286,6 +286,9 @@ func (e *DataClockConsensusEngine) handleDataPeerListAnnounce(
 	}
 
 	p := announce.Peer
+	if p == nil {
+		return nil
+	}
 
 	head, err := e.dataTimeReel.Head()
 	if err != nil {
