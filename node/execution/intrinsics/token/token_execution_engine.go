@@ -164,12 +164,13 @@ func NewTokenExecutionEngine(
 		}
 	}
 
-	if peerSeniority == nil {
+	if len(peerSeniority) == 0 {
 		peerSeniority, err = clockStore.GetPeerSeniorityMap(intrinsicFilter)
 		if err != nil && !errors.Is(err, store.ErrNotFound) {
 			panic(err)
 		}
-		if peerSeniority == nil {
+
+		if len(peerSeniority) == 0 {
 			peerSeniority, err = RebuildPeerSeniority(uint(cfg.P2P.Network))
 			if err != nil {
 				panic(err)
@@ -977,7 +978,7 @@ func (e *TokenExecutionEngine) GetSeniority() *big.Int {
 	)]
 
 	if !ok {
-		return nil
+		return big.NewInt(0)
 	}
 
 	return sen.Priority()
