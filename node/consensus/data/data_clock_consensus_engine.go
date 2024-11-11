@@ -541,11 +541,11 @@ func (e *DataClockConsensusEngine) PerformTimeProof(
 
 	wg := sync.WaitGroup{}
 	wg.Add(len(actives))
+
 	for i, client := range actives {
 		i := i
 		client := client
 		go func() {
-			e.logger.Info("performing data proof")
 			resp, err :=
 				client.client.CalculateChallengeProof(
 					context.Background(),

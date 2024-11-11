@@ -176,12 +176,17 @@ func (e *DataClockConsensusEngine) processFrame(
 									} else if len(e.config.Engine.DataWorkerMultiaddrs) == 0 {
 										e.logger.Error(
 											"client failed, reconnecting after 50ms",
+											zap.Uint32("client", uint32(i)),
 										)
 										time.Sleep(50 * time.Millisecond)
 										client, err =
 											e.createParallelDataClientsFromBaseMultiaddrAndIndex(uint32(i))
 										if err != nil {
-											e.logger.Error("failed to reconnect", zap.Error(err))
+											e.logger.Error(
+												"failed to reconnect",
+												zap.Uint32("client", uint32(i)),
+												zap.Error(err),
+											)
 										}
 									}
 									e.clients[i] = client
@@ -222,6 +227,12 @@ func (e *DataClockConsensusEngine) processFrame(
 				if err != nil {
 					panic(err)
 				}
+
+				e.logger.Info(
+					"submitting data proof",
+					zap.Int("ring", ring),
+					zap.Int("active_workers", len(outputs)),
+				)
 
 				e.publishMessage(e.txFilter, &protobufs.TokenRequest{
 					Request: &protobufs.TokenRequest_Mint{

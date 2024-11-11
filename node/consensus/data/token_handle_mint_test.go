@@ -52,6 +52,7 @@ func (pubsub) GetMultiaddrOfPeerStream(ctx context.Context, peerId []byte) <-cha
 	return nil
 }
 func (pubsub) GetMultiaddrOfPeer(peerId []byte) string { return "" }
+func (pubsub) GetNetwork() uint                        { return 1 }
 func (pubsub) StartDirectChannelListener(
 	key []byte,
 	purpose string,

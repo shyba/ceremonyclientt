@@ -51,7 +51,6 @@ func (rl *RateLimiter) Allow(peerId peer.ID) error {
 			return status.Errorf(codes.ResourceExhausted,
 				"maximum number of unique callers (%d) reached", rl.maxTokens)
 		}
-		return nil
 	}
 
 	rl.clients[peerId] = now
