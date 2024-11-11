@@ -232,6 +232,10 @@ func RebuildPeerSeniority(network uint) (map[string]uint64, error) {
 				PeerId: "Qma3bMDgVjCNgvSd3uomekF4v7Pq4VkTyT5R31FfdrqSan",
 				Reward: "39302",
 			},
+			{
+				PeerId: "QmUDWLhZMRoCoqkJAqvi815EJwjQAZoTm2oa9LkRwqeeAW",
+				Reward: "78604",
+			},
 		}
 		secondRetro = []*SecondRetroJson{
 			{
@@ -272,6 +276,15 @@ func RebuildPeerSeniority(network uint) (map[string]uint64, error) {
 			},
 			{
 				PeerId:      "QmZCMe29zbGkqceyzjjmzND9nDUMcWyMBUZSzMhns1sejH",
+				Reward:      "1000",
+				JanPresence: true,
+				FebPresence: true,
+				MarPresence: false,
+				AprPresence: false,
+				MayPresence: false,
+			},
+			{
+				PeerId:      "QmYSwFqgVKUFGkNM8Ae4DrarCjGKPJ4u7oJvRhrmx3YPpB",
 				Reward:      "1000",
 				JanPresence: true,
 				FebPresence: true,

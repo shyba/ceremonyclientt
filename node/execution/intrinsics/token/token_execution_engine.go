@@ -776,7 +776,8 @@ func (e *TokenExecutionEngine) ProcessFrame(
 		return nil, errors.Wrap(err, "process frame")
 	}
 
-	if frame.FrameNumber == application.PROOF_FRAME_RING_RESET {
+	if frame.FrameNumber == application.PROOF_FRAME_RING_RESET ||
+		frame.FrameNumber == application.PROOF_FRAME_RING_RESET_2 {
 		e.logger.Info("performing ring reset")
 		seniorityMap, err := RebuildPeerSeniority(e.pubSub.GetNetwork())
 		if err != nil {
