@@ -786,7 +786,6 @@ func (e *TokenExecutionEngine) ProcessFrame(
 
 		app.Tries = []*tries.RollingFrecencyCritbitTrie{
 			app.Tries[0],
-			&tries.RollingFrecencyCritbitTrie{},
 		}
 
 		err = e.clockStore.PutPeerSeniorityMap(

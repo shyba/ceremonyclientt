@@ -2,8 +2,10 @@ package data
 
 import (
 	"bytes"
+	"sync"
 	"time"
 
+	"github.com/iden3/go-iden3-crypto/poseidon"
 	"go.uber.org/zap"
 	"source.quilibrium.com/quilibrium/monorepo/node/consensus"
 	"source.quilibrium.com/quilibrium/monorepo/node/protobufs"
@@ -127,13 +129,155 @@ func (e *DataClockConsensusEngine) processFrame(
 
 		return nextFrame
 	} else {
-		if !e.IsInProverTrie(e.pubSub.GetPeerID()) &&
-			dataFrame.Timestamp > time.Now().UnixMilli()-30000 {
-			e.logger.Info("announcing prover join")
-			for _, eng := range e.executionEngines {
-				eng.AnnounceProverMerge()
-				eng.AnnounceProverJoin()
-				break
+		if latestFrame.Timestamp > time.Now().UnixMilli()-30000 {
+			if !e.IsInProverTrie(e.pubSub.GetPeerID()) {
+				e.logger.Info("announcing prover join")
+				for _, eng := range e.executionEngines {
+					eng.AnnounceProverMerge()
+					eng.AnnounceProverJoin()
+					break
+				}
+			} else {
+				h, err := poseidon.HashBytes(e.pubSub.GetPeerID())
+				if err != nil {
+					panic(err)
+				}
+				peerProvingKeyAddress := h.FillBytes(make([]byte, 32))
+
+				ring := -1
+				for i, tries := range e.GetFrameProverTries()[1:] {
+					i := i
+					if tries.Contains(peerProvingKeyAddress) {
+						ring = i
+					}
+				}
+
+				e.clientReconnectTest++
+				if e.clientReconnectTest >= 10 {
+					wg := sync.WaitGroup{}
+					wg.Add(len(e.clients))
+					for i, client := range e.clients {
+						i := i
+						client := client
+						go func() {
+							for j := 3; j >= 0; j-- {
+								var err error
+								if client == nil {
+									if len(e.config.Engine.DataWorkerMultiaddrs) != 0 {
+										e.logger.Error(
+											"client failed, reconnecting after 50ms",
+											zap.Uint32("client", uint32(i)),
+										)
+										time.Sleep(50 * time.Millisecond)
+										client, err = e.createParallelDataClientsFromListAndIndex(uint32(i))
+										if err != nil {
+											e.logger.Error("failed to reconnect", zap.Error(err))
+										}
+									} else if len(e.config.Engine.DataWorkerMultiaddrs) == 0 {
+										e.logger.Error(
+											"client failed, reconnecting after 50ms",
+										)
+										time.Sleep(50 * time.Millisecond)
+										client, err =
+											e.createParallelDataClientsFromBaseMultiaddrAndIndex(uint32(i))
+										if err != nil {
+											e.logger.Error("failed to reconnect", zap.Error(err))
+										}
+									}
+									e.clients[i] = client
+									continue
+								}
+							}
+							wg.Done()
+						}()
+					}
+					wg.Wait()
+					e.clientReconnectTest = 0
+				}
+
+				outputs := e.PerformTimeProof(latestFrame, latestFrame.Difficulty, ring)
+				if outputs == nil || len(outputs) < 3 {
+					e.logger.Error("could not successfully build proof, reattempting")
+					return latestFrame
+				}
+				modulo := len(outputs)
+				proofTree, payload, output, err := tries.PackOutputIntoPayloadAndProof(
+					outputs,
+					modulo,
+					latestFrame,
+					e.previousTree,
+				)
+				if err != nil {
+					e.logger.Error(
+						"could not successfully pack proof, reattempting",
+						zap.Error(err),
+					)
+					return latestFrame
+				}
+				e.previousTree = proofTree
+
+				sig, err := e.pubSub.SignMessage(
+					payload,
+				)
+				if err != nil {
+					panic(err)
+				}
+
+				e.publishMessage(e.txFilter, &protobufs.TokenRequest{
+					Request: &protobufs.TokenRequest_Mint{
+						Mint: &protobufs.MintCoinRequest{
+							Proofs: output,
+							Signature: &protobufs.Ed448Signature{
+								PublicKey: &protobufs.Ed448PublicKey{
+									KeyValue: e.pubSub.GetPublicKey(),
+								},
+								Signature: sig,
+							},
+						},
+					},
+				})
+
+				if e.config.Engine.AutoMergeCoins {
+					_, addrs, _, err := e.coinStore.GetCoinsForOwner(
+						peerProvingKeyAddress,
+					)
+					if err != nil {
+						e.logger.Error(
+							"received error while iterating coins",
+							zap.Error(err),
+						)
+						return latestFrame
+					}
+
+					if len(addrs) > 25 {
+						message := []byte("merge")
+						refs := []*protobufs.CoinRef{}
+						for _, addr := range addrs {
+							message = append(message, addr...)
+							refs = append(refs, &protobufs.CoinRef{
+								Address: addr,
+							})
+						}
+
+						sig, _ := e.pubSub.SignMessage(
+							message,
+						)
+
+						e.publishMessage(e.txFilter, &protobufs.TokenRequest{
+							Request: &protobufs.TokenRequest_Merge{
+								Merge: &protobufs.MergeCoinRequest{
+									Coins: refs,
+									Signature: &protobufs.Ed448Signature{
+										PublicKey: &protobufs.Ed448PublicKey{
+											KeyValue: e.pubSub.GetPublicKey(),
+										},
+										Signature: sig,
+									},
+								},
+							},
+						})
+					}
+				}
 			}
 		}
 		return latestFrame

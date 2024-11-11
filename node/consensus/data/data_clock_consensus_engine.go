@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/iden3/go-iden3-crypto/poseidon"
 	"github.com/libp2p/go-libp2p/p2p/discovery/backoff"
 	"github.com/multiformats/go-multiaddr"
 	mn "github.com/multiformats/go-multiaddr/net"
@@ -121,6 +120,8 @@ type DataClockConsensusEngine struct {
 	report                         *protobufs.SelfTestReport
 	clients                        []protobufs.DataIPCServiceClient
 	grpcRateLimiter                *RateLimiter
+	previousTree                   *mt.MerkleTree
+	clientReconnectTest            int
 }
 
 var _ consensus.DataConsensusEngine = (*DataClockConsensusEngine)(nil)
@@ -490,19 +491,6 @@ func (e *DataClockConsensusEngine) Start() <-chan error {
 	go e.runPreMidnightProofWorker()
 
 	go func() {
-		h, err := poseidon.HashBytes(e.pubSub.GetPeerID())
-		if err != nil {
-			panic(err)
-		}
-		peerProvingKeyAddress := h.FillBytes(make([]byte, 32))
-
-		frame, err := e.dataTimeReel.Head()
-		if err != nil {
-			panic(err)
-		}
-
-		// Let it sit until we at least have a few more peers inbound
-		time.Sleep(30 * time.Second)
 		parallelism := e.report.Cores - 1
 
 		if parallelism < 3 {
@@ -520,157 +508,6 @@ func (e *DataClockConsensusEngine) Start() <-chan error {
 			)
 			if err != nil {
 				panic(err)
-			}
-		}
-
-		var previousTree *mt.MerkleTree
-
-		clientReconnectTest := 0
-
-		for e.GetState() < consensus.EngineStateStopping {
-			nextFrame, err := e.dataTimeReel.Head()
-			if err != nil {
-				panic(err)
-			}
-
-			if frame.FrameNumber == nextFrame.FrameNumber {
-				time.Sleep(1 * time.Second)
-				continue
-			}
-
-			frame = nextFrame
-
-			clientReconnectTest++
-			if clientReconnectTest >= 10 {
-				wg := sync.WaitGroup{}
-				wg.Add(len(e.clients))
-				for i, client := range e.clients {
-					i := i
-					client := client
-					go func() {
-						for j := 3; j >= 0; j-- {
-							var err error
-							if client == nil {
-								if len(e.config.Engine.DataWorkerMultiaddrs) != 0 {
-									e.logger.Error(
-										"client failed, reconnecting after 50ms",
-										zap.Uint32("client", uint32(i)),
-									)
-									time.Sleep(50 * time.Millisecond)
-									client, err = e.createParallelDataClientsFromListAndIndex(uint32(i))
-									if err != nil {
-										e.logger.Error("failed to reconnect", zap.Error(err))
-									}
-								} else if len(e.config.Engine.DataWorkerMultiaddrs) == 0 {
-									e.logger.Error(
-										"client failed, reconnecting after 50ms",
-									)
-									time.Sleep(50 * time.Millisecond)
-									client, err =
-										e.createParallelDataClientsFromBaseMultiaddrAndIndex(uint32(i))
-									if err != nil {
-										e.logger.Error("failed to reconnect", zap.Error(err))
-									}
-								}
-								e.clients[i] = client
-								continue
-							}
-						}
-						wg.Done()
-					}()
-				}
-				wg.Wait()
-				clientReconnectTest = 0
-			}
-
-			for i, trie := range e.GetFrameProverTries()[1:] {
-				if trie.Contains(peerProvingKeyAddress) {
-					outputs := e.PerformTimeProof(frame, frame.Difficulty, i)
-					if outputs == nil || len(outputs) < 3 {
-						e.logger.Error("could not successfully build proof, reattempting")
-						break
-					}
-					modulo := len(outputs)
-					proofTree, payload, output, err := tries.PackOutputIntoPayloadAndProof(
-						outputs,
-						modulo,
-						frame,
-						previousTree,
-					)
-					if err != nil {
-						e.logger.Error(
-							"could not successfully pack proof, reattempting",
-							zap.Error(err),
-						)
-						break
-					}
-					previousTree = proofTree
-
-					sig, err := e.pubSub.SignMessage(
-						payload,
-					)
-					if err != nil {
-						panic(err)
-					}
-
-					e.publishMessage(e.txFilter, &protobufs.TokenRequest{
-						Request: &protobufs.TokenRequest_Mint{
-							Mint: &protobufs.MintCoinRequest{
-								Proofs: output,
-								Signature: &protobufs.Ed448Signature{
-									PublicKey: &protobufs.Ed448PublicKey{
-										KeyValue: e.pubSub.GetPublicKey(),
-									},
-									Signature: sig,
-								},
-							},
-						},
-					})
-
-					if e.config.Engine.AutoMergeCoins {
-						_, addrs, _, err := e.coinStore.GetCoinsForOwner(
-							peerProvingKeyAddress,
-						)
-						if err != nil {
-							e.logger.Error(
-								"received error while iterating coins",
-								zap.Error(err),
-							)
-							break
-						}
-
-						if len(addrs) > 25 {
-							message := []byte("merge")
-							refs := []*protobufs.CoinRef{}
-							for _, addr := range addrs {
-								message = append(message, addr...)
-								refs = append(refs, &protobufs.CoinRef{
-									Address: addr,
-								})
-							}
-
-							sig, _ := e.pubSub.SignMessage(
-								message,
-							)
-
-							e.publishMessage(e.txFilter, &protobufs.TokenRequest{
-								Request: &protobufs.TokenRequest_Merge{
-									Merge: &protobufs.MergeCoinRequest{
-										Coins: refs,
-										Signature: &protobufs.Ed448Signature{
-											PublicKey: &protobufs.Ed448PublicKey{
-												KeyValue: e.pubSub.GetPublicKey(),
-											},
-											Signature: sig,
-										},
-									},
-								},
-							})
-						}
-					}
-
-					break
-				}
 			}
 		}
 	}()

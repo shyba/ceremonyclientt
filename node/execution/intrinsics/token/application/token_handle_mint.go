@@ -19,7 +19,7 @@ import (
 )
 
 const PROOF_FRAME_CUTOFF = 1
-const PROOF_FRAME_RING_RESET = 5650
+const PROOF_FRAME_RING_RESET = 5750
 
 func (a *TokenApplication) handleMint(
 	currentFrameNumber uint64,
