@@ -76,6 +76,7 @@ message InclusionCommitmentsMap {
 
 message GetDataFrameRequest {
   uint64 frame_number = 1;
+  string peer_id = 2;
 }
 
 message DataFrameResponse {

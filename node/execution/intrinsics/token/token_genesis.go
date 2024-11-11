@@ -80,7 +80,100 @@ var secondRetro []*SecondRetroJson
 var thirdRetro []*ThirdRetroJson
 var fourthRetro []*FourthRetroJson
 
-func LoadAggregatedSeniorityMap() {
+func LoadAggregatedSeniorityMap(network uint) {
+	if network != 0 {
+		// testnet values are fixed to confirm test behaviors
+		firstRetro = []*FirstRetroJson{
+			{
+				PeerId: "QmTG8UAmrYBdLi76CEkXK7equRcoRRKBjbkK44oT6TcEGU",
+				Reward: "157208",
+			},
+			{
+				PeerId: "QmRZMVG1VbBWMEensjqBS7XqBzNfCoA5HxdDwCuouUeY16",
+				Reward: "157208",
+			},
+			{
+				PeerId: "QmWwqsH3vwPkRufqtdS1sgxgWwg8i4sgsfpeDy9BbX259p",
+				Reward: "78604",
+			},
+			{
+				PeerId: "QmNtGTnGLpi35sLmrgwd2EaUJFNz99WBd7ZzzRaw8GYo9e",
+				Reward: "78604",
+			},
+			{
+				PeerId: "QmNPx7PKUS6bz9MbJciWPDDRi6ufJ6vBgVqGrSXaUyUgb6",
+				Reward: "39302",
+			},
+			{
+				PeerId: "QmSdBumdhuWwMvb38XkExqGoGQ2jjjaFaVWKejEynFZJ8L",
+				Reward: "39302",
+			},
+			{
+				PeerId: "Qma3bMDgVjCNgvSd3uomekF4v7Pq4VkTyT5R31FfdrqSan",
+				Reward: "39302",
+			},
+		}
+		secondRetro = []*SecondRetroJson{
+			{
+				PeerId:      "QmeafLbKKfmRKQdF7LK1Z3ayNbzwRLmRpZCtjBXrGKZzht",
+				Reward:      "1000",
+				JanPresence: true,
+				FebPresence: true,
+				MarPresence: false,
+				AprPresence: false,
+				MayPresence: false,
+			},
+			{
+				PeerId:      "QmUbgmwR3Z8Vp9zHHeuGRxRrfh4YzLF5CbW48Ur8Kx9jAP",
+				Reward:      "1000",
+				JanPresence: true,
+				FebPresence: true,
+				MarPresence: false,
+				AprPresence: false,
+				MayPresence: false,
+			},
+			{
+				PeerId:      "QmYM47WUWSz8X13rXpcR2RPagSVAnjkwRw9V5Ps7X6quit",
+				Reward:      "1000",
+				JanPresence: true,
+				FebPresence: true,
+				MarPresence: false,
+				AprPresence: false,
+				MayPresence: false,
+			},
+			{
+				PeerId:      "QmUVZVDBRusH8wh8qfVoveTp9PwZTb2PxMXSLdbcznUVEo",
+				Reward:      "1000",
+				JanPresence: true,
+				FebPresence: true,
+				MarPresence: false,
+				AprPresence: false,
+				MayPresence: false,
+			},
+			{
+				PeerId:      "QmZCMe29zbGkqceyzjjmzND9nDUMcWyMBUZSzMhns1sejH",
+				Reward:      "1000",
+				JanPresence: true,
+				FebPresence: true,
+				MarPresence: false,
+				AprPresence: false,
+				MayPresence: false,
+			},
+		}
+		thirdRetro = []*ThirdRetroJson{
+			{
+				PeerId: "QmZ36PUzJYMM7Mz319cXwDZNtYuhtuFChcWep2ZY25ZGMN",
+				Reward: "1000",
+			},
+			{
+				PeerId: "QmaQuJGk6fGrYYTQiBFFasKLxSKkEkPaywEKoVbnXULEEG",
+				Reward: "1000",
+			},
+		}
+		fourthRetro = []*FourthRetroJson{}
+		return
+	}
+
 	firstRetro = []*FirstRetroJson{}
 	secondRetro = []*SecondRetroJson{}
 	thirdRetro = []*ThirdRetroJson{}
@@ -109,32 +202,120 @@ func LoadAggregatedSeniorityMap() {
 
 func RebuildPeerSeniority(network uint) (map[string]uint64, error) {
 	if network != 0 {
-		return map[string]uint64{}, nil
-	}
+		// testnet values are fixed to confirm test behaviors
+		firstRetro = []*FirstRetroJson{
+			{
+				PeerId: "QmTG8UAmrYBdLi76CEkXK7equRcoRRKBjbkK44oT6TcEGU",
+				Reward: "157208",
+			},
+			{
+				PeerId: "QmRZMVG1VbBWMEensjqBS7XqBzNfCoA5HxdDwCuouUeY16",
+				Reward: "157208",
+			},
+			{
+				PeerId: "QmWwqsH3vwPkRufqtdS1sgxgWwg8i4sgsfpeDy9BbX259p",
+				Reward: "78604",
+			},
+			{
+				PeerId: "QmNtGTnGLpi35sLmrgwd2EaUJFNz99WBd7ZzzRaw8GYo9e",
+				Reward: "78604",
+			},
+			{
+				PeerId: "QmNPx7PKUS6bz9MbJciWPDDRi6ufJ6vBgVqGrSXaUyUgb6",
+				Reward: "39302",
+			},
+			{
+				PeerId: "QmSdBumdhuWwMvb38XkExqGoGQ2jjjaFaVWKejEynFZJ8L",
+				Reward: "39302",
+			},
+			{
+				PeerId: "Qma3bMDgVjCNgvSd3uomekF4v7Pq4VkTyT5R31FfdrqSan",
+				Reward: "39302",
+			},
+		}
+		secondRetro = []*SecondRetroJson{
+			{
+				PeerId:      "QmeafLbKKfmRKQdF7LK1Z3ayNbzwRLmRpZCtjBXrGKZzht",
+				Reward:      "1000",
+				JanPresence: true,
+				FebPresence: true,
+				MarPresence: false,
+				AprPresence: false,
+				MayPresence: false,
+			},
+			{
+				PeerId:      "QmUbgmwR3Z8Vp9zHHeuGRxRrfh4YzLF5CbW48Ur8Kx9jAP",
+				Reward:      "1000",
+				JanPresence: true,
+				FebPresence: true,
+				MarPresence: false,
+				AprPresence: false,
+				MayPresence: false,
+			},
+			{
+				PeerId:      "QmYM47WUWSz8X13rXpcR2RPagSVAnjkwRw9V5Ps7X6quit",
+				Reward:      "1000",
+				JanPresence: true,
+				FebPresence: true,
+				MarPresence: false,
+				AprPresence: false,
+				MayPresence: false,
+			},
+			{
+				PeerId:      "QmUVZVDBRusH8wh8qfVoveTp9PwZTb2PxMXSLdbcznUVEo",
+				Reward:      "1000",
+				JanPresence: true,
+				FebPresence: true,
+				MarPresence: false,
+				AprPresence: false,
+				MayPresence: false,
+			},
+			{
+				PeerId:      "QmZCMe29zbGkqceyzjjmzND9nDUMcWyMBUZSzMhns1sejH",
+				Reward:      "1000",
+				JanPresence: true,
+				FebPresence: true,
+				MarPresence: false,
+				AprPresence: false,
+				MayPresence: false,
+			},
+		}
+		thirdRetro = []*ThirdRetroJson{
+			{
+				PeerId: "QmZ36PUzJYMM7Mz319cXwDZNtYuhtuFChcWep2ZY25ZGMN",
+				Reward: "1000",
+			},
+			{
+				PeerId: "QmaQuJGk6fGrYYTQiBFFasKLxSKkEkPaywEKoVbnXULEEG",
+				Reward: "1000",
+			},
+		}
+		fourthRetro = []*FourthRetroJson{}
+	} else {
+		firstRetro = []*FirstRetroJson{}
+		secondRetro = []*SecondRetroJson{}
+		thirdRetro = []*ThirdRetroJson{}
+		fourthRetro = []*FourthRetroJson{}
 
-	firstRetro = []*FirstRetroJson{}
-	secondRetro = []*SecondRetroJson{}
-	thirdRetro = []*ThirdRetroJson{}
-	fourthRetro = []*FourthRetroJson{}
+		err := json.Unmarshal(firstRetroJsonBinary, &firstRetro)
+		if err != nil {
+			return nil, err
+		}
 
-	err := json.Unmarshal(firstRetroJsonBinary, &firstRetro)
-	if err != nil {
-		return nil, err
-	}
+		err = json.Unmarshal(secondRetroJsonBinary, &secondRetro)
+		if err != nil {
+			return nil, err
+		}
 
-	err = json.Unmarshal(secondRetroJsonBinary, &secondRetro)
-	if err != nil {
-		return nil, err
-	}
+		err = json.Unmarshal(thirdRetroJsonBinary, &thirdRetro)
+		if err != nil {
+			return nil, err
+		}
 
-	err = json.Unmarshal(thirdRetroJsonBinary, &thirdRetro)
-	if err != nil {
-		return nil, err
-	}
-
-	err = json.Unmarshal(fourthRetroJsonBinary, &fourthRetro)
-	if err != nil {
-		return nil, err
+		err = json.Unmarshal(fourthRetroJsonBinary, &fourthRetro)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	peerSeniority := map[string]uint64{}
@@ -146,7 +327,7 @@ func RebuildPeerSeniority(network uint) (map[string]uint64, error) {
 			return nil, err
 		}
 
-		p := []byte(f.PeerId)
+		p, _ := base58.Decode(f.PeerId)
 		addr, _ := poseidon.HashBytes(p)
 
 		peerSeniority[string(
@@ -155,7 +336,7 @@ func RebuildPeerSeniority(network uint) (map[string]uint64, error) {
 	}
 
 	for _, f := range secondRetro {
-		p := []byte(f.PeerId)
+		p, _ := base58.Decode(f.PeerId)
 		addr, _ := poseidon.HashBytes(p)
 		addrBytes := string(addr.FillBytes(make([]byte, 32)))
 
@@ -185,7 +366,7 @@ func RebuildPeerSeniority(network uint) (map[string]uint64, error) {
 	}
 
 	for _, f := range thirdRetro {
-		p := []byte(f.PeerId)
+		p, _ := base58.Decode(f.PeerId)
 		addr, _ := poseidon.HashBytes(p)
 		addrBytes := string(addr.FillBytes(make([]byte, 32)))
 
@@ -197,7 +378,7 @@ func RebuildPeerSeniority(network uint) (map[string]uint64, error) {
 	}
 
 	for _, f := range fourthRetro {
-		p := []byte(f.PeerId)
+		p, _ := base58.Decode(f.PeerId)
 		addr, _ := poseidon.HashBytes(p)
 		addrBytes := string(addr.FillBytes(make([]byte, 32)))
 
@@ -315,7 +496,7 @@ func CreateGenesisState(
 		peerSeniority := map[string]uint64{}
 		logger.Info("encoding first retro state")
 		for _, f := range firstRetro {
-			p := []byte(f.PeerId)
+			p, _ := base58.Decode(f.PeerId)
 			addr, _ := poseidon.HashBytes(p)
 			addrBytes := string(addr.FillBytes(make([]byte, 32)))
 			if _, ok := bridgedAddrs[f.PeerId]; !ok {
@@ -344,7 +525,7 @@ func CreateGenesisState(
 
 		logger.Info("encoding second retro state")
 		for _, f := range secondRetro {
-			p := []byte(f.PeerId)
+			p, _ := base58.Decode(f.PeerId)
 			addr, _ := poseidon.HashBytes(p)
 			addrBytes := string(addr.FillBytes(make([]byte, 32)))
 
@@ -390,7 +571,7 @@ func CreateGenesisState(
 
 		logger.Info("encoding third retro state")
 		for _, f := range thirdRetro {
-			p := []byte(f.PeerId)
+			p, _ := base58.Decode(f.PeerId)
 			addr, _ := poseidon.HashBytes(p)
 			addrBytes := string(addr.FillBytes(make([]byte, 32)))
 
@@ -416,7 +597,7 @@ func CreateGenesisState(
 
 		logger.Info("encoding fourth retro state")
 		for _, f := range fourthRetro {
-			p := []byte(f.PeerId)
+			p, _ := base58.Decode(f.PeerId)
 			addr, _ := poseidon.HashBytes(p)
 			addrBytes := string(addr.FillBytes(make([]byte, 32)))
 
@@ -782,6 +963,8 @@ func CreateGenesisState(
 
 		logger.Info("finalizing execution proof")
 
+		m, _ := RebuildPeerSeniority(network)
+
 		return inputMessage, &qcrypto.InclusionAggregateProof{
 			InclusionCommitments: []*qcrypto.InclusionCommitment{
 				&qcrypto.InclusionCommitment{
@@ -792,6 +975,6 @@ func CreateGenesisState(
 			},
 			AggregateCommitment: commitment,
 			Proof:               proof,
-		}, [][]byte{genesis.Beacon}, map[string]uint64{}
+		}, [][]byte{genesis.Beacon}, m
 	}
 }

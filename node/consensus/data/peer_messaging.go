@@ -28,6 +28,14 @@ func (e *DataClockConsensusEngine) GetDataFrame(
 	ctx context.Context,
 	request *protobufs.GetDataFrameRequest,
 ) (*protobufs.DataFrameResponse, error) {
+	if request.PeerId == "" || len(request.PeerId) > 64 {
+		return nil, errors.Wrap(errors.New("invalid request"), "get data frame")
+	}
+
+	if err := e.grpcRateLimiter.Allow(request.PeerId); err != nil {
+		return nil, errors.Wrap(err, "get data frame")
+	}
+
 	e.logger.Debug(
 		"received frame request",
 		zap.Uint64("frame_number", request.FrameNumber),
@@ -51,7 +59,7 @@ func (e *DataClockConsensusEngine) GetDataFrame(
 	}
 
 	if err != nil {
-		e.logger.Error(
+		e.logger.Debug(
 			"received error while fetching time reel head",
 			zap.Error(err),
 		)

@@ -139,7 +139,7 @@ func (pc *peerConnector) connect() {
 	logger.Info("initiating peer connections")
 	var success, failure, duplicate uint32
 	defer func() {
-		logger.Info(
+		logger.Debug(
 			"completed peer connections",
 			zap.Uint32("success", success),
 			zap.Uint32("failure", failure),

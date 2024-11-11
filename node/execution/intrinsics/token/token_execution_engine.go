@@ -5,6 +5,7 @@ import (
 	"crypto"
 	"encoding/binary"
 	"encoding/hex"
+	"fmt"
 	"math/big"
 	"slices"
 	"strconv"
@@ -193,7 +194,7 @@ func NewTokenExecutionEngine(
 			}
 		}
 	} else {
-		LoadAggregatedSeniorityMap()
+		LoadAggregatedSeniorityMap(uint(cfg.P2P.Network))
 	}
 
 	e := &TokenExecutionEngine{
@@ -586,7 +587,7 @@ func (e *TokenExecutionEngine) ProcessFrame(
 					txn.Abort()
 					return nil, errors.Wrap(err, "process frame")
 				}
-
+				fmt.Println(hex.EncodeToString(addr))
 				sen, ok := (*e.peerSeniority)[string(addr)]
 				if !ok {
 					e.logger.Debug(
@@ -661,6 +662,7 @@ func (e *TokenExecutionEngine) ProcessFrame(
 				txn.Abort()
 				return nil, errors.Wrap(err, "process frame")
 			}
+			fmt.Println(hex.EncodeToString(addr))
 			if _, ok := (*e.peerSeniority)[string(addr)]; !ok {
 				(*e.peerSeniority)[string(addr)] = PeerSeniorityItem{
 					seniority: 20,
@@ -772,6 +774,31 @@ func (e *TokenExecutionEngine) ProcessFrame(
 	if err != nil {
 		txn.Abort()
 		return nil, errors.Wrap(err, "process frame")
+	}
+
+	if frame.FrameNumber == application.PROOF_FRAME_RING_RESET {
+		e.logger.Info("performing ring reset")
+		seniorityMap, err := RebuildPeerSeniority(e.pubSub.GetNetwork())
+		if err != nil {
+			return nil, errors.Wrap(err, "process frame")
+		}
+		e.peerSeniority = newFromMap(seniorityMap)
+
+		app.Tries = []*tries.RollingFrecencyCritbitTrie{
+			app.Tries[0],
+			&tries.RollingFrecencyCritbitTrie{},
+		}
+
+		err = e.clockStore.PutPeerSeniorityMap(
+			txn,
+			e.intrinsicFilter,
+			toSerializedMap(e.peerSeniority),
+		)
+		if err != nil {
+			txn.Abort()
+			return nil, errors.Wrap(err, "process frame")
+		}
+
 	}
 
 	return app.Tries, nil

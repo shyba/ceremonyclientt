@@ -843,6 +843,10 @@ func (b *BlossomSub) GetMultiaddrOfPeer(peerId []byte) string {
 	return addrs[0].String()
 }
 
+func (b *BlossomSub) GetNetwork() uint {
+	return uint(b.network)
+}
+
 func (b *BlossomSub) StartDirectChannelListener(
 	key []byte,
 	purpose string,
