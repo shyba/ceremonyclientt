@@ -786,7 +786,6 @@ func (e *TokenExecutionEngine) ProcessFrame(
 
 		app.Tries = []*tries.RollingFrecencyCritbitTrie{
 			app.Tries[0],
-			&tries.RollingFrecencyCritbitTrie{},
 		}
 
 		err = e.clockStore.PutPeerSeniorityMap(
@@ -831,6 +830,19 @@ func ProcessJoinsAndLeaves(
 			if t.Contains([]byte(addr.addr)) {
 				t.Remove([]byte(addr.addr))
 				break
+			}
+		}
+	}
+
+	if frame.FrameNumber > application.PROOF_FRAME_RING_RESET {
+		if len(app.Tries) > 2 {
+			for _, t := range app.Tries[2:] {
+				nodes := t.FindNearestAndApproximateNeighbors(make([]byte, 32))
+				for _, n := range nodes {
+					if n.External.LatestFrame < frame.FrameNumber-1000 {
+						t.Remove(n.External.Key)
+					}
+				}
 			}
 		}
 	}

@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p"
-	gostream "github.com/libp2p/go-libp2p-gostream"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	libp2pconfig "github.com/libp2p/go-libp2p/config"
 	"github.com/libp2p/go-libp2p/core/crypto"
@@ -31,6 +30,7 @@ import (
 	rcmgr "github.com/libp2p/go-libp2p/p2p/host/resource-manager"
 	routedhost "github.com/libp2p/go-libp2p/p2p/host/routed"
 	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
+	"github.com/libp2p/go-libp2p/p2p/net/gostream"
 	"github.com/libp2p/go-libp2p/p2p/net/swarm"
 	"github.com/libp2p/go-libp2p/p2p/protocol/ping"
 	"github.com/mr-tron/base58"
@@ -621,6 +621,31 @@ func (b *BlossomSub) Unsubscribe(bitmask []byte, raw bool) {
 	}
 
 	bm.Close()
+}
+
+func (b *BlossomSub) RegisterValidator(
+	bitmask []byte, validator func(peerID peer.ID, message *pb.Message) ValidationResult,
+) error {
+	validatorEx := func(
+		ctx context.Context, peerID peer.ID, message *blossomsub.Message,
+	) blossomsub.ValidationResult {
+		switch v := validator(peerID, message.Message); v {
+		case ValidationResultAccept:
+			return blossomsub.ValidationAccept
+		case ValidationResultReject:
+			return blossomsub.ValidationReject
+		case ValidationResultIgnore:
+			return blossomsub.ValidationIgnore
+		default:
+			panic("unreachable")
+		}
+	}
+	var _ blossomsub.ValidatorEx = validatorEx
+	return b.ps.RegisterBitmaskValidator(bitmask, validatorEx)
+}
+
+func (b *BlossomSub) UnregisterValidator(bitmask []byte) error {
+	return b.ps.UnregisterBitmaskValidator(bitmask)
 }
 
 func (b *BlossomSub) GetPeerID() []byte {

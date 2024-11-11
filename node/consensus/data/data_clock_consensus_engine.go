@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/iden3/go-iden3-crypto/poseidon"
 	"github.com/libp2p/go-libp2p/p2p/discovery/backoff"
 	"github.com/multiformats/go-multiaddr"
 	mn "github.com/multiformats/go-multiaddr/net"
@@ -53,9 +52,6 @@ type peerInfo struct {
 	timestamp     int64
 	lastSeen      int64
 	version       []byte
-	signature     []byte
-	publicKey     []byte
-	direct        bool
 	totalDistance []byte
 }
 
@@ -104,6 +100,7 @@ type DataClockConsensusEngine struct {
 	filter                         []byte
 	txFilter                       []byte
 	infoFilter                     []byte
+	frameFilter                    []byte
 	input                          []byte
 	parentSelector                 []byte
 	syncingStatus                  SyncStatusType
@@ -124,6 +121,8 @@ type DataClockConsensusEngine struct {
 	report                         *protobufs.SelfTestReport
 	clients                        []protobufs.DataIPCServiceClient
 	grpcRateLimiter                *RateLimiter
+	previousTree                   *mt.MerkleTree
+	clientReconnectTest            int
 }
 
 var _ consensus.DataConsensusEngine = (*DataClockConsensusEngine)(nil)
@@ -209,12 +208,9 @@ func NewDataClockConsensusEngine(
 	}
 
 	rateLimit := cfg.P2P.GrpcServerRateLimit
-	rateLimitTokens := 0
 	if rateLimit == 0 {
 		rateLimit = 10
 	}
-
-	rateLimitTokens = rateLimit * rateLimit
 
 	e := &DataClockConsensusEngine{
 		difficulty:       difficulty,
@@ -254,8 +250,6 @@ func NewDataClockConsensusEngine(
 		config:                    cfg,
 		preMidnightMint:           map[string]struct{}{},
 		grpcRateLimiter: NewRateLimiter(
-			rateLimitTokens,
-			rateLimit,
 			rateLimit,
 			time.Minute,
 		),
@@ -270,6 +264,7 @@ func NewDataClockConsensusEngine(
 	e.filter = filter
 	e.txFilter = append([]byte{0x00}, e.filter...)
 	e.infoFilter = append([]byte{0x00, 0x00}, e.filter...)
+	e.frameFilter = append([]byte{0x00, 0x00, 0x00}, e.filter...)
 	e.input = seed
 	e.provingKey = signer
 	e.provingKeyType = keyType
@@ -307,7 +302,10 @@ func (e *DataClockConsensusEngine) Start() <-chan error {
 	go e.runInfoMessageHandler()
 
 	e.logger.Info("subscribing to pubsub messages")
-	e.pubSub.Subscribe(e.filter, e.handleFrameMessage)
+	e.pubSub.RegisterValidator(e.frameFilter, e.validateFrameMessage)
+	e.pubSub.RegisterValidator(e.txFilter, e.validateTxMessage)
+	e.pubSub.RegisterValidator(e.infoFilter, e.validateInfoMessage)
+	e.pubSub.Subscribe(e.frameFilter, e.handleFrameMessage)
 	e.pubSub.Subscribe(e.txFilter, e.handleTxMessage)
 	e.pubSub.Subscribe(e.infoFilter, e.handleInfoMessage)
 	go func() {
@@ -400,8 +398,18 @@ func (e *DataClockConsensusEngine) Start() <-chan error {
 
 			frame = nextFrame
 
+			timestamp := time.Now().UnixMilli()
 			list := &protobufs.DataPeerListAnnounce{
-				PeerList: []*protobufs.DataPeer{},
+				Peer: &protobufs.DataPeer{
+					PeerId:    nil,
+					Multiaddr: "",
+					MaxFrame:  frame.FrameNumber,
+					Version:   config.GetVersion(),
+					Timestamp: timestamp,
+					TotalDistance: e.dataTimeReel.GetTotalDistance().FillBytes(
+						make([]byte, 256),
+					),
+				},
 			}
 
 			e.latestFrameReceived = frame.FrameNumber
@@ -410,41 +418,18 @@ func (e *DataClockConsensusEngine) Start() <-chan error {
 				zap.Uint64("frame_number", frame.FrameNumber),
 			)
 
-			timestamp := time.Now().UnixMilli()
-			msg := binary.BigEndian.AppendUint64([]byte{}, frame.FrameNumber)
-			msg = append(msg, config.GetVersion()...)
-			msg = binary.BigEndian.AppendUint64(msg, uint64(timestamp))
-			sig, err := e.pubSub.SignMessage(msg)
-			if err != nil {
-				panic(err)
-			}
-
 			e.peerMapMx.Lock()
 			e.peerMap[string(e.pubSub.GetPeerID())] = &peerInfo{
 				peerId:    e.pubSub.GetPeerID(),
 				multiaddr: "",
 				maxFrame:  frame.FrameNumber,
 				version:   config.GetVersion(),
-				signature: sig,
-				publicKey: e.pubSub.GetPublicKey(),
 				timestamp: timestamp,
 				totalDistance: e.dataTimeReel.GetTotalDistance().FillBytes(
 					make([]byte, 256),
 				),
 			}
 			deletes := []*peerInfo{}
-			list.PeerList = append(list.PeerList, &protobufs.DataPeer{
-				PeerId:    e.pubSub.GetPeerID(),
-				Multiaddr: "",
-				MaxFrame:  frame.FrameNumber,
-				Version:   config.GetVersion(),
-				Signature: sig,
-				PublicKey: e.pubSub.GetPublicKey(),
-				Timestamp: timestamp,
-				TotalDistance: e.dataTimeReel.GetTotalDistance().FillBytes(
-					make([]byte, 256),
-				),
-			})
 			for _, v := range e.peerMap {
 				if v == nil {
 					continue
@@ -506,19 +491,6 @@ func (e *DataClockConsensusEngine) Start() <-chan error {
 	go e.runPreMidnightProofWorker()
 
 	go func() {
-		h, err := poseidon.HashBytes(e.pubSub.GetPeerID())
-		if err != nil {
-			panic(err)
-		}
-		peerProvingKeyAddress := h.FillBytes(make([]byte, 32))
-
-		frame, err := e.dataTimeReel.Head()
-		if err != nil {
-			panic(err)
-		}
-
-		// Let it sit until we at least have a few more peers inbound
-		time.Sleep(30 * time.Second)
 		parallelism := e.report.Cores - 1
 
 		if parallelism < 3 {
@@ -536,157 +508,6 @@ func (e *DataClockConsensusEngine) Start() <-chan error {
 			)
 			if err != nil {
 				panic(err)
-			}
-		}
-
-		var previousTree *mt.MerkleTree
-
-		clientReconnectTest := 0
-
-		for e.GetState() < consensus.EngineStateStopping {
-			nextFrame, err := e.dataTimeReel.Head()
-			if err != nil {
-				panic(err)
-			}
-
-			if frame.FrameNumber == nextFrame.FrameNumber {
-				time.Sleep(1 * time.Second)
-				continue
-			}
-
-			frame = nextFrame
-
-			clientReconnectTest++
-			if clientReconnectTest >= 10 {
-				wg := sync.WaitGroup{}
-				wg.Add(len(e.clients))
-				for i, client := range e.clients {
-					i := i
-					client := client
-					go func() {
-						for j := 3; j >= 0; j-- {
-							var err error
-							if client == nil {
-								if len(e.config.Engine.DataWorkerMultiaddrs) != 0 {
-									e.logger.Error(
-										"client failed, reconnecting after 50ms",
-										zap.Uint32("client", uint32(i)),
-									)
-									time.Sleep(50 * time.Millisecond)
-									client, err = e.createParallelDataClientsFromListAndIndex(uint32(i))
-									if err != nil {
-										e.logger.Error("failed to reconnect", zap.Error(err))
-									}
-								} else if len(e.config.Engine.DataWorkerMultiaddrs) == 0 {
-									e.logger.Error(
-										"client failed, reconnecting after 50ms",
-									)
-									time.Sleep(50 * time.Millisecond)
-									client, err =
-										e.createParallelDataClientsFromBaseMultiaddrAndIndex(uint32(i))
-									if err != nil {
-										e.logger.Error("failed to reconnect", zap.Error(err))
-									}
-								}
-								e.clients[i] = client
-								continue
-							}
-						}
-						wg.Done()
-					}()
-				}
-				wg.Wait()
-				clientReconnectTest = 0
-			}
-
-			for i, trie := range e.GetFrameProverTries()[1:] {
-				if trie.Contains(peerProvingKeyAddress) {
-					outputs := e.PerformTimeProof(frame, frame.Difficulty, i)
-					if outputs == nil || len(outputs) < 3 {
-						e.logger.Error("could not successfully build proof, reattempting")
-						break
-					}
-					modulo := len(outputs)
-					proofTree, payload, output, err := tries.PackOutputIntoPayloadAndProof(
-						outputs,
-						modulo,
-						frame,
-						previousTree,
-					)
-					if err != nil {
-						e.logger.Error(
-							"could not successfully pack proof, reattempting",
-							zap.Error(err),
-						)
-						break
-					}
-					previousTree = proofTree
-
-					sig, err := e.pubSub.SignMessage(
-						payload,
-					)
-					if err != nil {
-						panic(err)
-					}
-
-					e.publishMessage(e.txFilter, &protobufs.TokenRequest{
-						Request: &protobufs.TokenRequest_Mint{
-							Mint: &protobufs.MintCoinRequest{
-								Proofs: output,
-								Signature: &protobufs.Ed448Signature{
-									PublicKey: &protobufs.Ed448PublicKey{
-										KeyValue: e.pubSub.GetPublicKey(),
-									},
-									Signature: sig,
-								},
-							},
-						},
-					})
-
-					if e.config.Engine.AutoMergeCoins {
-						_, addrs, _, err := e.coinStore.GetCoinsForOwner(
-							peerProvingKeyAddress,
-						)
-						if err != nil {
-							e.logger.Error(
-								"received error while iterating coins",
-								zap.Error(err),
-							)
-							break
-						}
-
-						if len(addrs) > 25 {
-							message := []byte("merge")
-							refs := []*protobufs.CoinRef{}
-							for _, addr := range addrs {
-								message = append(message, addr...)
-								refs = append(refs, &protobufs.CoinRef{
-									Address: addr,
-								})
-							}
-
-							sig, _ := e.pubSub.SignMessage(
-								message,
-							)
-
-							e.publishMessage(e.txFilter, &protobufs.TokenRequest{
-								Request: &protobufs.TokenRequest_Merge{
-									Merge: &protobufs.MergeCoinRequest{
-										Coins: refs,
-										Signature: &protobufs.Ed448Signature{
-											PublicKey: &protobufs.Ed448PublicKey{
-												KeyValue: e.pubSub.GetPublicKey(),
-											},
-											Signature: sig,
-										},
-									},
-								},
-							})
-						}
-					}
-
-					break
-				}
 			}
 		}
 	}()
@@ -723,11 +544,11 @@ func (e *DataClockConsensusEngine) PerformTimeProof(
 
 	wg := sync.WaitGroup{}
 	wg.Add(len(actives))
+
 	for i, client := range actives {
 		i := i
 		client := client
 		go func() {
-			e.logger.Info("performing data proof")
 			resp, err :=
 				client.client.CalculateChallengeProof(
 					context.Background(),
@@ -812,6 +633,13 @@ func (e *DataClockConsensusEngine) Stop(force bool) <-chan error {
 		}(name)
 	}
 
+	e.pubSub.Unsubscribe(e.frameFilter, false)
+	e.pubSub.Unsubscribe(e.txFilter, false)
+	e.pubSub.Unsubscribe(e.infoFilter, false)
+	e.pubSub.UnregisterValidator(e.frameFilter)
+	e.pubSub.UnregisterValidator(e.txFilter)
+	e.pubSub.UnregisterValidator(e.infoFilter)
+
 	e.logger.Info("waiting for execution engines to stop")
 	wg.Wait()
 	e.logger.Info("execution engines stopped")
@@ -860,8 +688,6 @@ func (
 			MaxFrame:      v.maxFrame,
 			Timestamp:     v.timestamp,
 			Version:       v.version,
-			Signature:     v.signature,
-			PublicKey:     v.publicKey,
 			TotalDistance: v.totalDistance,
 		})
 	}
@@ -874,8 +700,6 @@ func (
 				MaxFrame:      v.maxFrame,
 				Timestamp:     v.timestamp,
 				Version:       v.version,
-				Signature:     v.signature,
-				PublicKey:     v.publicKey,
 				TotalDistance: v.totalDistance,
 			},
 		)
