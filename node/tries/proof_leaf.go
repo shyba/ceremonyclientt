@@ -32,6 +32,12 @@ func PackOutputIntoPayloadAndProof(
 	frame *protobufs.ClockFrame,
 	previousTree *mt.MerkleTree,
 ) (*mt.MerkleTree, []byte, [][]byte, error) {
+	if modulo != len(outputs) {
+		return nil, nil, nil, errors.Wrap(
+			errors.New("mismatch of outputs and prover size"),
+			"pack output into payload and proof",
+		)
+	}
 	tree, err := mt.New(
 		&mt.Config{
 			HashFunc: func(data []byte) ([]byte, error) {

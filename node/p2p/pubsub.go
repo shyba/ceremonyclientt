@@ -38,4 +38,5 @@ type PubSub interface {
 	AddPeerScore(peerId []byte, scoreDelta int64)
 	Reconnect(peerId []byte) error
 	DiscoverPeers() error
+	GetNetwork() uint
 }

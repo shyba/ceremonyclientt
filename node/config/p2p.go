@@ -40,4 +40,5 @@ type P2PConfig struct {
 	LowWatermarkConnections   uint          `yaml:"lowWatermarkConnections"`
 	HighWatermarkConnections  uint          `yaml:"highWatermarkConnections"`
 	DirectPeers               []string      `yaml:"directPeers"`
+	GrpcServerRateLimit       int           `yaml:"grpcServerRateLimit"`
 }

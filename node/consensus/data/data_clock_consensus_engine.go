@@ -123,6 +123,7 @@ type DataClockConsensusEngine struct {
 	infoMessageProcessorCh         chan *pb.Message
 	report                         *protobufs.SelfTestReport
 	clients                        []protobufs.DataIPCServiceClient
+	grpcRateLimiter                *RateLimiter
 }
 
 var _ consensus.DataConsensusEngine = (*DataClockConsensusEngine)(nil)
@@ -207,6 +208,14 @@ func NewDataClockConsensusEngine(
 		difficulty = 160000
 	}
 
+	rateLimit := cfg.P2P.GrpcServerRateLimit
+	rateLimitTokens := 0
+	if rateLimit == 0 {
+		rateLimit = 10
+	}
+
+	rateLimitTokens = rateLimit * rateLimit
+
 	e := &DataClockConsensusEngine{
 		difficulty:       difficulty,
 		logger:           logger,
@@ -244,6 +253,12 @@ func NewDataClockConsensusEngine(
 		infoMessageProcessorCh:    make(chan *pb.Message),
 		config:                    cfg,
 		preMidnightMint:           map[string]struct{}{},
+		grpcRateLimiter: NewRateLimiter(
+			rateLimitTokens,
+			rateLimit,
+			rateLimit,
+			time.Minute,
+		),
 	}
 
 	logger.Info("constructing consensus engine")
@@ -297,8 +312,8 @@ func (e *DataClockConsensusEngine) Start() <-chan error {
 	e.pubSub.Subscribe(e.infoFilter, e.handleInfoMessage)
 	go func() {
 		server := grpc.NewServer(
-			grpc.MaxSendMsgSize(600*1024*1024),
-			grpc.MaxRecvMsgSize(600*1024*1024),
+			grpc.MaxSendMsgSize(20*1024*1024),
+			grpc.MaxRecvMsgSize(20*1024*1024),
 		)
 		protobufs.RegisterDataServiceServer(server, e)
 		if err := e.pubSub.StartDirectChannelListener(
