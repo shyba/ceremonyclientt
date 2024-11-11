@@ -208,12 +208,9 @@ func NewDataClockConsensusEngine(
 	}
 
 	rateLimit := cfg.P2P.GrpcServerRateLimit
-	rateLimitTokens := 0
 	if rateLimit == 0 {
 		rateLimit = 10
 	}
-
-	rateLimitTokens = rateLimit * rateLimit
 
 	e := &DataClockConsensusEngine{
 		difficulty:       difficulty,
@@ -253,8 +250,6 @@ func NewDataClockConsensusEngine(
 		config:                    cfg,
 		preMidnightMint:           map[string]struct{}{},
 		grpcRateLimiter: NewRateLimiter(
-			rateLimitTokens,
-			rateLimit,
 			rateLimit,
 			time.Minute,
 		),

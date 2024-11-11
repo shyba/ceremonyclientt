@@ -31,13 +31,15 @@ func (e *DataClockConsensusEngine) GetDataFrame(
 	ctx context.Context,
 	request *protobufs.GetDataFrameRequest,
 ) (*protobufs.DataFrameResponse, error) {
-	peerID, ok := grpc_internal.PeerIDFromContext(ctx)
-	if !ok {
-		return nil, status.Error(codes.Internal, "remote peer ID not found")
-	}
+	if e.config.P2P.GrpcServerRateLimit != -1 {
+		peerID, ok := grpc_internal.PeerIDFromContext(ctx)
+		if !ok {
+			return nil, status.Error(codes.Internal, "remote peer ID not found")
+		}
 
-	if err := e.grpcRateLimiter.Allow(peerID); err != nil {
-		return nil, errors.Wrap(err, "get data frame")
+		if err := e.grpcRateLimiter.Allow(peerID); err != nil {
+			return nil, errors.Wrap(err, "get data frame")
+		}
 	}
 
 	e.logger.Debug(
