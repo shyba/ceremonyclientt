@@ -61,6 +61,7 @@ type DataTimeReel struct {
 	newFrameCh      chan *protobufs.ClockFrame
 	badFrameCh      chan *protobufs.ClockFrame
 	done            chan bool
+	alwaysSend      bool
 }
 
 func NewDataTimeReel(
@@ -80,6 +81,7 @@ func NewDataTimeReel(
 	origin []byte,
 	initialInclusionProof *crypto.InclusionAggregateProof,
 	initialProverKeys [][]byte,
+	alwaysSend bool,
 ) *DataTimeReel {
 	if filter == nil {
 		panic("filter is nil")
@@ -128,6 +130,7 @@ func NewDataTimeReel(
 		newFrameCh:      make(chan *protobufs.ClockFrame),
 		badFrameCh:      make(chan *protobufs.ClockFrame),
 		done:            make(chan bool),
+		alwaysSend:      alwaysSend,
 	}
 }
 
@@ -664,6 +667,9 @@ func (d *DataTimeReel) setHead(frame *protobufs.ClockFrame, distance *big.Int) e
 	d.head = frame
 
 	d.headDistance = distance
+	if d.alwaysSend {
+		d.newFrameCh <- frame
+	}
 	go func() {
 		select {
 		case d.newFrameCh <- frame:

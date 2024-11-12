@@ -617,6 +617,13 @@ func RunForkRepairIfNeeded(
 			}
 		}
 
+		if err = txn.Commit(); err != nil {
+			txn.Abort()
+
+			logger.Error("could not commit data", zap.Error(err))
+			return
+		}
+
 		logger.Info("inserting valid frame starting at position 48995")
 		type OverrideFrames struct {
 			FrameData []byte `json:"frameData"`
@@ -631,11 +638,11 @@ func RunForkRepairIfNeeded(
 		for _, overrideFrame := range overrideFramesJson {
 			override := &protobufs.ClockFrame{}
 			if err := proto.Unmarshal(overrideFrame.FrameData, override); err != nil {
-				txn.Abort()
 				logger.Error("could not unmarshal frame data", zap.Error(err))
 				return
 			}
 
+			txn, _ := clockStore.NewTransaction()
 			if err := overrideHead(
 				txn,
 				clockStore,
@@ -647,13 +654,13 @@ func RunForkRepairIfNeeded(
 				logger.Error("could not override frame data", zap.Error(err))
 				return
 			}
-		}
 
-		if err = txn.Commit(); err != nil {
-			txn.Abort()
+			if err = txn.Commit(); err != nil {
+				txn.Abort()
 
-			logger.Error("could not commit data", zap.Error(err))
-			return
+				logger.Error("could not commit data", zap.Error(err))
+				return
+			}
 		}
 	} else {
 		fmt.Println("No repair needed.")
@@ -758,11 +765,6 @@ func processFrame(
 		)
 		return nil, errors.Wrap(err, "process frame")
 	}
-
-	logger.Debug(
-		"app outputs",
-		zap.Int("outputs", len(app.TokenOutputs.Outputs)),
-	)
 
 	proverTrieJoinRequests := [][]byte{}
 	proverTrieLeaveRequests := [][]byte{}
@@ -879,22 +881,13 @@ func processFrame(
 					txn.Abort()
 					return nil, errors.Wrap(err, "process frame")
 				}
-				fmt.Println(hex.EncodeToString(addr))
 				sen, ok := (*peerSeniority)[string(addr)]
 				if !ok {
-					logger.Debug(
-						"peer announced with no seniority",
-						zap.String("peer_id", peerId),
-					)
 					continue
 				}
 
 				peer := new(big.Int).SetUint64(sen.GetSeniority())
 				if peer.Cmp(token.GetAggregatedSeniority([]string{peerId})) != 0 {
-					logger.Debug(
-						"peer announced but is already different seniority",
-						zap.String("peer_id", peerIds[0]),
-					)
 					mergeable = false
 					break
 				}
@@ -951,7 +944,6 @@ func processFrame(
 				txn.Abort()
 				return nil, errors.Wrap(err, "process frame")
 			}
-			fmt.Println(hex.EncodeToString(addr))
 			if _, ok := (*peerSeniority)[string(addr)]; !ok {
 				(*peerSeniority)[string(addr)] = token.NewPeerSeniorityItem(20, string(addr))
 			} else {

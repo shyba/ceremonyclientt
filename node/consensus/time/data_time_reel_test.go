@@ -186,6 +186,7 @@ func TestDataTimeReel(t *testing.T) {
 			Proof:                []byte{},
 		},
 		pubKeys,
+		true,
 	)
 
 	err = d.Start()

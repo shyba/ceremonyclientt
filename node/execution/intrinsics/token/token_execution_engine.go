@@ -221,6 +221,11 @@ func NewTokenExecutionEngine(
 		peerSeniority:         NewFromMap(peerSeniority),
 	}
 
+	alwaysSend := false
+	if bytes.Equal(config.GetGenesis().Beacon, pubSub.GetPublicKey()) {
+		alwaysSend = true
+	}
+
 	dataTimeReel := time.NewDataTimeReel(
 		intrinsicFilter,
 		logger,
@@ -250,6 +255,7 @@ func NewTokenExecutionEngine(
 		origin,
 		inclusionProof,
 		proverKeys,
+		alwaysSend,
 	)
 
 	e.clock = data.NewDataClockConsensusEngine(

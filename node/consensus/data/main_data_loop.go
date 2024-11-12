@@ -41,6 +41,7 @@ func (
 
 func (e *DataClockConsensusEngine) runLoop() {
 	dataFrameCh := e.dataTimeReel.NewFrameCh()
+	runOnce := true
 	for e.GetState() < consensus.EngineStateStopping {
 		peerCount := e.pubSub.GetNetworkPeersCount()
 		if peerCount < e.minimumPeersRequired {
@@ -57,8 +58,26 @@ func (e *DataClockConsensusEngine) runLoop() {
 
 			select {
 			case dataFrame := <-dataFrameCh:
+				if e.GetFrameProverTries()[0].Contains(e.provingKeyAddress) {
+					if err = e.publishProof(dataFrame); err != nil {
+						e.logger.Error("could not publish", zap.Error(err))
+						e.stateMx.Lock()
+						if e.state < consensus.EngineStateStopping {
+							e.state = consensus.EngineStateCollecting
+						}
+						e.stateMx.Unlock()
+					}
+				}
 				latestFrame = e.processFrame(latestFrame, dataFrame)
 			case <-time.After(20 * time.Second):
+				if e.GetFrameProverTries()[0].Contains(e.provingKeyAddress) && !runOnce {
+					continue
+				}
+
+				if runOnce {
+					runOnce = false
+				}
+
 				dataFrame, err := e.dataTimeReel.Head()
 				if err != nil {
 					panic(err)
@@ -117,15 +136,6 @@ func (e *DataClockConsensusEngine) processFrame(
 		}
 
 		e.dataTimeReel.Insert(nextFrame, true)
-
-		if err = e.publishProof(nextFrame); err != nil {
-			e.logger.Error("could not publish", zap.Error(err))
-			e.stateMx.Lock()
-			if e.state < consensus.EngineStateStopping {
-				e.state = consensus.EngineStateCollecting
-			}
-			e.stateMx.Unlock()
-		}
 
 		return nextFrame
 	} else {
