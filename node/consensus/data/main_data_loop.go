@@ -139,7 +139,7 @@ func (e *DataClockConsensusEngine) processFrame(
 
 		return nextFrame
 	} else {
-		if latestFrame.Timestamp > time.Now().UnixMilli()-30000 {
+		if latestFrame.Timestamp > time.Now().UnixMilli()-120000 {
 			if !e.IsInProverTrie(e.pubSub.GetPeerID()) {
 				e.logger.Info("announcing prover join")
 				for _, eng := range e.executionEngines {
@@ -156,10 +156,12 @@ func (e *DataClockConsensusEngine) processFrame(
 				peerProvingKeyAddress := h.FillBytes(make([]byte, 32))
 
 				ring := -1
-				for i, tries := range e.GetFrameProverTries()[1:] {
-					i := i
-					if tries.Contains(peerProvingKeyAddress) {
-						ring = i
+				if len(e.GetFrameProverTries()) > 1 {
+					for i, tries := range e.GetFrameProverTries()[1:] {
+						i := i
+						if tries.Contains(peerProvingKeyAddress) {
+							ring = i
+						}
 					}
 				}
 

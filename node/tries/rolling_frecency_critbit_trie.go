@@ -38,6 +38,9 @@ type RollingFrecencyCritbitTrie struct {
 func (t *RollingFrecencyCritbitTrie) Serialize() ([]byte, error) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
+	if t.Root == nil {
+		return []byte{}, nil
+	}
 
 	var b bytes.Buffer
 	enc := gob.NewEncoder(&b)
@@ -52,6 +55,9 @@ func (t *RollingFrecencyCritbitTrie) Serialize() ([]byte, error) {
 func (t *RollingFrecencyCritbitTrie) Deserialize(buf []byte) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	if len(buf) == 0 {
+		return nil
+	}
 
 	var b bytes.Buffer
 	b.Write(buf)

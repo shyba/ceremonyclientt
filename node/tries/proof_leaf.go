@@ -67,6 +67,12 @@ func PackOutputIntoPayloadAndProof(
 	if previousTree != nil {
 		hash := sha3.Sum256(frame.Output)
 		pick := BytesToUnbiasedMod(hash, uint64(modulo))
+		if uint64(modulo) < pick {
+			return nil, nil, nil, errors.Wrap(
+				errors.New("proof size mismatch"),
+				"pack output into payload and proof",
+			)
+		}
 		for _, sib := range previousTree.Proofs[int(pick)].Siblings {
 			payload = append(payload, sib...)
 			output = append(output, sib)
