@@ -5,7 +5,6 @@ import (
 	"crypto"
 	"encoding/binary"
 	"encoding/hex"
-	"fmt"
 	"math/big"
 	"slices"
 	"strconv"
@@ -46,9 +45,17 @@ func NewPeerSeniorityItem(seniority uint64, addr string) PeerSeniorityItem {
 	}
 }
 
+func (p PeerSeniorityItem) GetSeniority() uint64 {
+	return p.seniority
+}
+
+func (p PeerSeniorityItem) GetAddr() string {
+	return p.addr
+}
+
 type PeerSeniority map[string]PeerSeniorityItem
 
-func newFromMap(m map[string]uint64) *PeerSeniority {
+func NewFromMap(m map[string]uint64) *PeerSeniority {
 	s := &PeerSeniority{}
 	for k, v := range m {
 		(*s)[k] = PeerSeniorityItem{
@@ -59,7 +66,7 @@ func newFromMap(m map[string]uint64) *PeerSeniority {
 	return s
 }
 
-func toSerializedMap(m *PeerSeniority) map[string]uint64 {
+func ToSerializedMap(m *PeerSeniority) map[string]uint64 {
 	s := map[string]uint64{}
 	for k, v := range *m {
 		s[k] = v.seniority
@@ -211,7 +218,7 @@ func NewTokenExecutionEngine(
 		peerChannels:          map[string]*p2p.PublicP2PChannel{},
 		alreadyPublishedShare: false,
 		intrinsicFilter:       intrinsicFilter,
-		peerSeniority:         newFromMap(peerSeniority),
+		peerSeniority:         NewFromMap(peerSeniority),
 	}
 
 	dataTimeReel := time.NewDataTimeReel(
@@ -587,7 +594,7 @@ func (e *TokenExecutionEngine) ProcessFrame(
 					txn.Abort()
 					return nil, errors.Wrap(err, "process frame")
 				}
-				fmt.Println(hex.EncodeToString(addr))
+
 				sen, ok := (*e.peerSeniority)[string(addr)]
 				if !ok {
 					e.logger.Debug(
@@ -598,7 +605,7 @@ func (e *TokenExecutionEngine) ProcessFrame(
 				}
 
 				peer := new(big.Int).SetUint64(sen.seniority)
-				if peer.Cmp(e.GetAggregatedSeniority([]string{peerId})) != 0 {
+				if peer.Cmp(GetAggregatedSeniority([]string{peerId})) != 0 {
 					e.logger.Debug(
 						"peer announced but is already different seniority",
 						zap.String("peer_id", peerIds[0]),
@@ -637,7 +644,7 @@ func (e *TokenExecutionEngine) ProcessFrame(
 				}
 
 				(*e.peerSeniority)[string(addr)] = PeerSeniorityItem{
-					seniority: e.GetAggregatedSeniority(peerIds).Uint64() + additional,
+					seniority: GetAggregatedSeniority(peerIds).Uint64() + additional,
 					addr:      string(addr),
 				}
 
@@ -662,7 +669,7 @@ func (e *TokenExecutionEngine) ProcessFrame(
 				txn.Abort()
 				return nil, errors.Wrap(err, "process frame")
 			}
-			fmt.Println(hex.EncodeToString(addr))
+
 			if _, ok := (*e.peerSeniority)[string(addr)]; !ok {
 				(*e.peerSeniority)[string(addr)] = PeerSeniorityItem{
 					seniority: 20,
@@ -763,7 +770,7 @@ func (e *TokenExecutionEngine) ProcessFrame(
 	err = e.clockStore.PutPeerSeniorityMap(
 		txn,
 		e.intrinsicFilter,
-		toSerializedMap(e.peerSeniority),
+		ToSerializedMap(e.peerSeniority),
 	)
 	if err != nil {
 		txn.Abort()
@@ -782,7 +789,7 @@ func (e *TokenExecutionEngine) ProcessFrame(
 		if err != nil {
 			return nil, errors.Wrap(err, "process frame")
 		}
-		e.peerSeniority = newFromMap(seniorityMap)
+		e.peerSeniority = NewFromMap(seniorityMap)
 
 		app.Tries = []*tries.RollingFrecencyCritbitTrie{
 			app.Tries[0],
@@ -791,7 +798,7 @@ func (e *TokenExecutionEngine) ProcessFrame(
 		err = e.clockStore.PutPeerSeniorityMap(
 			txn,
 			e.intrinsicFilter,
-			toSerializedMap(e.peerSeniority),
+			ToSerializedMap(e.peerSeniority),
 		)
 		if err != nil {
 			txn.Abort()
@@ -1023,7 +1030,7 @@ func (e *TokenExecutionEngine) GetSeniority() *big.Int {
 	return sen.Priority()
 }
 
-func (e *TokenExecutionEngine) GetAggregatedSeniority(peerIds []string) *big.Int {
+func GetAggregatedSeniority(peerIds []string) *big.Int {
 	highestFirst := uint64(0)
 	highestSecond := uint64(0)
 	highestThird := uint64(0)
@@ -1140,7 +1147,7 @@ func (e *TokenExecutionEngine) AnnounceProverMerge() {
 	keys := [][]byte{}
 	ksigs := [][]byte{}
 	if len(e.engineConfig.MultisigProverEnrollmentPaths) != 0 &&
-		e.GetSeniority().Cmp(e.GetAggregatedSeniority(
+		e.GetSeniority().Cmp(GetAggregatedSeniority(
 			[]string{peer.ID(e.pubSub.GetPeerID()).String()},
 		)) == 0 {
 		for _, conf := range e.engineConfig.MultisigProverEnrollmentPaths {
