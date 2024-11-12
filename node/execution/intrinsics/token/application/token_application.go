@@ -140,8 +140,10 @@ func (a *TokenApplication) ApplyTransitions(
 	}
 
 	parallelismMap := map[int]uint64{}
-	for i := range a.Tries[1:] {
-		parallelismMap[i] = 0
+	if len(a.Tries) > 1 {
+		for i := range a.Tries[1:] {
+			parallelismMap[i] = 0
+		}
 	}
 
 	seen := map[string]struct{}{}

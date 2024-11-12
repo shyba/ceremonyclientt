@@ -858,7 +858,7 @@ func ProcessJoinsAndLeaves(
 				}
 				process := eligibilityOrder.All()
 				slices.Reverse(process)
-				for s := 0; s+setSize < 2048; s++ {
+				for s := 0; s < len(process) && s+setSize < 2048; s++ {
 					app.Tries[1+i].Add([]byte(process[s].addr), frame.FrameNumber)
 					app.Tries[2+i].Remove([]byte(process[s].addr))
 				}
