@@ -235,6 +235,7 @@ func NewTokenExecutionEngine(
 		tries := []*tries.RollingFrecencyCritbitTrie{
 			&tries.RollingFrecencyCritbitTrie{},
 		}
+		proverKeys = [][]byte{config.GetGenesis().Beacon}
 		for _, key := range proverKeys {
 			addr, _ := poseidon.HashBytes(key)
 			tries[0].Add(addr.FillBytes(make([]byte, 32)), 0)
