@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"math/big"
+	"os"
 	"sync"
 
 	lru "github.com/hashicorp/golang-lru/v2"
@@ -149,6 +150,16 @@ func (d *DataTimeReel) Start() error {
 		d.headDistance = big.NewInt(0)
 	} else {
 		if len(tries[0].FindNearestAndApproximateNeighbors(make([]byte, 32))) == 0 {
+			if frame.FrameNumber > 53027 {
+				d.logger.Info("DANGER")
+				d.logger.Info("DANGER")
+				d.logger.Info("DANGER")
+				d.logger.Info("It appears your node is running with a broken store. Please restore from backup or create a new store.")
+				d.logger.Info("DANGER")
+				d.logger.Info("DANGER")
+				d.logger.Info("DANGER")
+				os.Exit(1)
+			}
 			d.logger.Info("encountered trie corruption, invoking restoration")
 			tries = d.restore()
 		}

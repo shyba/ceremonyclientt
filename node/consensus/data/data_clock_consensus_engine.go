@@ -479,9 +479,9 @@ func (e *DataClockConsensusEngine) Start() <-chan error {
 		time.Sleep(30 * time.Second)
 		e.logger.Info("checking for snapshots to play forward")
 		if err := e.downloadSnapshot(e.config.DB.Path, e.config.P2P.Network); err != nil {
-			e.logger.Error("error downloading snapshot", zap.Error(err))
+			e.logger.Debug("error downloading snapshot", zap.Error(err))
 		} else if err := e.applySnapshot(e.config.DB.Path); err != nil {
-			e.logger.Error("error replaying snapshot", zap.Error(err))
+			e.logger.Debug("error replaying snapshot", zap.Error(err))
 		}
 	}()
 
