@@ -211,7 +211,7 @@ func (e *DataClockConsensusEngine) handleClockFrame(
 	}
 
 	trie := e.GetFrameProverTries()[0]
-	if !trie.Contains(addr.Bytes()) {
+	if !trie.Contains(addr.FillBytes(make([]byte, 32))) {
 		e.logger.Debug(
 			"prover not in trie at frame, address may be in fork",
 			zap.Binary("address", address),
