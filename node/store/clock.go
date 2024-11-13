@@ -1538,6 +1538,7 @@ func (p *PebbleClockStore) SetProverTriesForFrame(
 	frame *protobufs.ClockFrame,
 	tries []*tries.RollingFrecencyCritbitTrie,
 ) error {
+	start := 0
 	for i, proverTrie := range tries {
 		proverData, err := proverTrie.Serialize()
 		if err != nil {
@@ -1550,6 +1551,26 @@ func (p *PebbleClockStore) SetProverTriesForFrame(
 		); err != nil {
 			return errors.Wrap(err, "set prover tries for frame")
 		}
+		start = i
+	}
+
+	start++
+	for {
+		_, closer, err := p.db.Get(
+			clockProverTrieKey(frame.Filter, uint16(start), frame.FrameNumber),
+		)
+		if err != nil {
+			break
+		}
+		closer.Close()
+
+		if err = p.db.Delete(
+			clockProverTrieKey(frame.Filter, uint16(start), frame.FrameNumber),
+		); err != nil {
+			return errors.Wrap(err, "set prover tries for frame")
+		}
+
+		start++
 	}
 
 	return nil

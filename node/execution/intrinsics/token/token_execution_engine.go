@@ -659,8 +659,9 @@ func (e *TokenExecutionEngine) ProcessFrame(
 				peer := new(big.Int).SetUint64(sen.seniority)
 				if peer.Cmp(GetAggregatedSeniority([]string{peerId})) != 0 {
 					logger(
-						"peer announced but is already different seniority",
-						zap.String("peer_id", peerIds[0]),
+						"peer announced but has already been announced",
+						zap.String("peer_id", peerId),
+						zap.Uint64("seniority", sen.seniority),
 					)
 					mergeable = false
 					break
@@ -743,8 +744,9 @@ func (e *TokenExecutionEngine) ProcessFrame(
 				peer := new(big.Int).SetUint64(sen.seniority)
 				if peer.Cmp(GetAggregatedSeniority([]string{peerIds[0]})) != 0 {
 					logger(
-						"peer announced but is already different seniority",
+						"peer announced but has already been announced",
 						zap.String("peer_id", peerIds[0]),
+						zap.Uint64("seniority", sen.seniority),
 					)
 					continue
 				}
