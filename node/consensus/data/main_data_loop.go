@@ -147,7 +147,8 @@ func (e *DataClockConsensusEngine) processFrame(
 					break
 				}
 			} else {
-				if e.previousFrameProven.FrameNumber == latestFrame.FrameNumber {
+				if e.previousFrameProven != nil &&
+					e.previousFrameProven.FrameNumber == latestFrame.FrameNumber {
 					return latestFrame
 				}
 
