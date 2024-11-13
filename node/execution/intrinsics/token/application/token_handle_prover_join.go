@@ -117,6 +117,14 @@ func (a *TokenApplication) handleDataAnnounceProverJoin(
 		return nil, errors.Wrap(ErrInvalidStateTransition, "handle join")
 	}
 
+	outputs := []*protobufs.TokenOutput{}
+	if t.Announce != nil {
+		outputs, err = a.handleAnnounce(currentFrameNumber, lockMap, t.Announce)
+		if err != nil {
+			return nil, errors.Wrap(ErrInvalidStateTransition, "handle join")
+		}
+	}
+
 	lockMap[string(t.PublicKeySignatureEd448.PublicKey.KeyValue)] = struct{}{}
 	for _, t := range a.Tries {
 		if t.Contains(address) {
@@ -124,11 +132,14 @@ func (a *TokenApplication) handleDataAnnounceProverJoin(
 		}
 	}
 
-	return []*protobufs.TokenOutput{
+	outputs = append(
+		outputs,
 		&protobufs.TokenOutput{
 			Output: &protobufs.TokenOutput_Join{
 				Join: t,
 			},
 		},
-	}, nil
+	)
+
+	return outputs, nil
 }

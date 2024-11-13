@@ -101,6 +101,14 @@ func LoadAggregatedSeniorityMap(network uint) {
 				Reward: "78604",
 			},
 			{
+				PeerId: "QmSjeYnJAbUEq3vdVP89PNbKuTfFgLXZ1cLKaWShbs2hvW",
+				Reward: "78604",
+			},
+			{
+				PeerId: "QmQrhv7bymSWPaJsatr3kdp14GP2JpTE128syPVj3eUjLy",
+				Reward: "78604",
+			},
+			{
 				PeerId: "QmNPx7PKUS6bz9MbJciWPDDRi6ufJ6vBgVqGrSXaUyUgb6",
 				Reward: "39302",
 			},
@@ -116,6 +124,24 @@ func LoadAggregatedSeniorityMap(network uint) {
 		secondRetro = []*SecondRetroJson{
 			{
 				PeerId:      "QmeafLbKKfmRKQdF7LK1Z3ayNbzwRLmRpZCtjBXrGKZzht",
+				Reward:      "1000",
+				JanPresence: true,
+				FebPresence: true,
+				MarPresence: false,
+				AprPresence: false,
+				MayPresence: false,
+			},
+			{
+				PeerId:      "QmaPh3cY9Gi8CbBr4H7nTZUABu8cJwXxRnp2utgg1urGjp",
+				Reward:      "1000",
+				JanPresence: true,
+				FebPresence: true,
+				MarPresence: false,
+				AprPresence: false,
+				MayPresence: false,
+			},
+			{
+				PeerId:      "QmapvC4ApSxBz1J6Cdfra8375pJRo1FKp1bad5mLvn3KEK",
 				Reward:      "1000",
 				JanPresence: true,
 				FebPresence: true,
@@ -209,8 +235,28 @@ func RebuildPeerSeniority(network uint) (map[string]uint64, error) {
 				Reward: "157208",
 			},
 			{
+				PeerId: "QmVDhgHgpvFG2ZiCYhUPKXA8i5j8Fp9zoGE5Bc6SLwsiuA",
+				Reward: "157208",
+			},
+			{
 				PeerId: "QmRZMVG1VbBWMEensjqBS7XqBzNfCoA5HxdDwCuouUeY16",
 				Reward: "157208",
+			},
+			{
+				PeerId: "QmPpk2cbkpzAiadWDQVCL4XBukLNNY4BujT9LYq3DYE3ZR",
+				Reward: "157208",
+			},
+			{
+				PeerId: "QmR3Xuc3t7zbnUy5fcC4iY58fnHEsFmzYra6JgY9sRqE8Y",
+				Reward: "157208",
+			},
+			{
+				PeerId: "QmPjwYSn29VoYogxAzGbh5kgGYB5rZFauSS66c3J4KkK4j",
+				Reward: "78604",
+			},
+			{
+				PeerId: "QmayFGarM7BVPYWnjAF7rBQAczXniELHKPKHS5VY8URZBd",
+				Reward: "78604",
 			},
 			{
 				PeerId: "QmWwqsH3vwPkRufqtdS1sgxgWwg8i4sgsfpeDy9BbX259p",
@@ -233,11 +279,33 @@ func RebuildPeerSeniority(network uint) (map[string]uint64, error) {
 				Reward: "39302",
 			},
 			{
+				PeerId: "QmbQ9Bp4SvspysHLTAYQtFN7MY9Acae4AwVFjTy3rp7Q2A",
+				Reward: "39302",
+			},
+			{
 				PeerId: "QmUDWLhZMRoCoqkJAqvi815EJwjQAZoTm2oa9LkRwqeeAW",
 				Reward: "78604",
 			},
 		}
 		secondRetro = []*SecondRetroJson{
+			{
+				PeerId:      "QmPpk2cbkpzAiadWDQVCL4XBukLNNY4BujT9LYq3DYE3ZR",
+				Reward:      "1000",
+				JanPresence: true,
+				FebPresence: true,
+				MarPresence: false,
+				AprPresence: false,
+				MayPresence: false,
+			},
+			{
+				PeerId:      "Qma3bMDgVjCNgvSd3uomekF4v7Pq4VkTyT5R31FfdrqSan",
+				Reward:      "1000",
+				JanPresence: true,
+				FebPresence: true,
+				MarPresence: false,
+				AprPresence: false,
+				MayPresence: false,
+			},
 			{
 				PeerId:      "QmeafLbKKfmRKQdF7LK1Z3ayNbzwRLmRpZCtjBXrGKZzht",
 				Reward:      "1000",
@@ -284,6 +352,15 @@ func RebuildPeerSeniority(network uint) (map[string]uint64, error) {
 				MayPresence: false,
 			},
 			{
+				PeerId:      "QmXDWA4f3J5WxmseBfuCEsZNv8aeAkUrJ7fqoxr894tFCi",
+				Reward:      "1000",
+				JanPresence: true,
+				FebPresence: true,
+				MarPresence: false,
+				AprPresence: false,
+				MayPresence: false,
+			},
+			{
 				PeerId:      "QmYSwFqgVKUFGkNM8Ae4DrarCjGKPJ4u7oJvRhrmx3YPpB",
 				Reward:      "1000",
 				JanPresence: true,
@@ -302,8 +379,21 @@ func RebuildPeerSeniority(network uint) (map[string]uint64, error) {
 				PeerId: "QmaQuJGk6fGrYYTQiBFFasKLxSKkEkPaywEKoVbnXULEEG",
 				Reward: "1000",
 			},
+			{
+				PeerId: "QmYKSNoRkpL3ufKLhNUS77jirDJ5zWg9yGZmrBJhBcsaoE",
+				Reward: "1000",
+			},
+			{
+				PeerId: "QmZCMe29zbGkqceyzjjmzND9nDUMcWyMBUZSzMhns1sejH",
+				Reward: "1000",
+			},
 		}
-		fourthRetro = []*FourthRetroJson{}
+		fourthRetro = []*FourthRetroJson{
+			{
+				PeerId: "QmaQuJGk6fGrYYTQiBFFasKLxSKkEkPaywEKoVbnXULEEG",
+				Reward: "1000",
+			},
+		}
 	} else {
 		firstRetro = []*FirstRetroJson{}
 		secondRetro = []*SecondRetroJson{}

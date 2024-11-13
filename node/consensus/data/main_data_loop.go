@@ -121,7 +121,7 @@ func (e *DataClockConsensusEngine) processFrame(
 	sel = selBI.FillBytes(sel)
 
 	if bytes.Equal(
-		trie.FindNearest(sel).External.Key,
+		trie.FindNearest(sel).Key,
 		e.provingKeyAddress,
 	) {
 		var nextFrame *protobufs.ClockFrame
@@ -143,8 +143,6 @@ func (e *DataClockConsensusEngine) processFrame(
 			if !e.IsInProverTrie(e.pubSub.GetPeerID()) {
 				e.logger.Info("announcing prover join")
 				for _, eng := range e.executionEngines {
-					eng.AnnounceProverMerge()
-					time.Sleep(10 * time.Second)
 					eng.AnnounceProverJoin()
 					break
 				}

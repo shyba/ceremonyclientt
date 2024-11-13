@@ -220,7 +220,7 @@ func TestDataTimeReel(t *testing.T) {
 			prev,
 		)
 		optimalSigner, _ := keyManager.GetSigningKey(
-			addrMap[string(proverSelection.External.Key)],
+			addrMap[string(proverSelection.Key)],
 		)
 		frame, err = prover.ProveDataClockFrame(
 			frame,
@@ -244,7 +244,7 @@ func TestDataTimeReel(t *testing.T) {
 			prev,
 		)
 		optimalSigner, _ := keyManager.GetSigningKey(
-			addrMap[string(proverSelection.External.Key)],
+			addrMap[string(proverSelection.Key)],
 		)
 		frame, err = prover.ProveDataClockFrame(
 			frame,
@@ -273,7 +273,7 @@ func TestDataTimeReel(t *testing.T) {
 			prev,
 		)
 		optimalSigner, _ := keyManager.GetSigningKey(
-			addrMap[string(proverSelection.External.Key)],
+			addrMap[string(proverSelection.Key)],
 		)
 		frame, err = prover.ProveDataClockFrame(
 			frame,
@@ -293,7 +293,7 @@ func TestDataTimeReel(t *testing.T) {
 		prev,
 	)
 	suboptimalSigner2, _ := keyManager.GetSigningKey(
-		addrMap[string(proverSelections[2].External.Key)],
+		addrMap[string(proverSelections[2].Key)],
 	)
 	// What we're trying to simulate: consensus heads progressed on a slightly
 	// less optimal prover.
@@ -315,7 +315,7 @@ func TestDataTimeReel(t *testing.T) {
 			prev,
 		)
 		optimalSigner, _ := keyManager.GetSigningKey(
-			addrMap[string(proverSelection.External.Key)],
+			addrMap[string(proverSelection.Key)],
 		)
 		frame, err = prover.ProveDataClockFrame(
 			frame,
@@ -346,10 +346,10 @@ func TestDataTimeReel(t *testing.T) {
 			prev,
 		)
 		optimalSigner, _ := keyManager.GetSigningKey(
-			addrMap[string(proverSelections[0].External.Key)],
+			addrMap[string(proverSelections[0].Key)],
 		)
 		suboptimalSigner2, _ := keyManager.GetSigningKey(
-			addrMap[string(proverSelections[2].External.Key)],
+			addrMap[string(proverSelections[2].Key)],
 		)
 		optimalKeySet = append(optimalKeySet, []byte(
 			(optimalSigner.Public()).(ed448.PublicKey),

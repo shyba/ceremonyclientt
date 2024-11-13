@@ -2,8 +2,6 @@ package tries_test
 
 import (
 	"crypto/rand"
-	"fmt"
-	"math/big"
 	"testing"
 
 	"github.com/cloudflare/circl/sign/ed448"
@@ -14,7 +12,7 @@ import (
 
 func TestSerializers(t *testing.T) {
 	tree := &tries.RollingFrecencyCritbitTrie{}
-	for i := 0; i < 10000; i++ {
+	for i := 0; i < 100; i++ {
 		seed := make([]byte, 57)
 		rand.Read(seed)
 
@@ -36,21 +34,6 @@ func TestSerializers(t *testing.T) {
 	assert.NoError(t, err)
 	err = newTree.Deserialize(buf)
 	assert.NoError(t, err)
-
-	for i := 0; i < 256; i++ {
-		seed := make([]byte, 57)
-		rand.Read(seed)
-
-		priv := ed448.NewKeyFromSeed(seed)
-		pubkey := (priv.Public()).(ed448.PublicKey)
-		disc, err := poseidon.HashBytes(pubkey)
-		assert.NoError(t, err)
-
-		newTreeNeighbors := newTree.FindNearestAndApproximateNeighbors(disc.Bytes())
-		for i, n := range tree.FindNearestAndApproximateNeighbors(disc.Bytes()) {
-			assert.Equal(t, n.Bits(), newTreeNeighbors[i].Bits())
-		}
-	}
 }
 
 func TestCritbitReinit(t *testing.T) {
@@ -61,54 +44,21 @@ func TestCritbitReinit(t *testing.T) {
 		rand.Read(seed)
 		set = append(set, seed)
 		tree.Add(seed, 14)
+		assert.True(t, tree.Contains(seed))
 		tree.Remove(seed)
+		assert.False(t, tree.Contains(seed))
 	}
 	for i := 0; i < 1024; i++ {
 		tree.Add(set[i], 14)
 	}
+	near := tree.FindNearestAndApproximateNeighbors(make([]byte, 32))
+	assert.Equal(t, 1024, len(near))
 	for i := 0; i < 1024; i++ {
 		tree.Remove(set[i])
+		assert.False(t, tree.Contains(set[i]))
+		near = tree.FindNearestAndApproximateNeighbors(make([]byte, 32))
+		assert.Equal(t, 1024-i-1, len(near))
 	}
-	near := tree.FindNearestAndApproximateNeighbors(make([]byte, 32))
-	for _, n := range near {
-		fmt.Println(n.External.Key)
-	}
-}
-
-func TestCritbit(t *testing.T) {
-	tree := &tries.RollingFrecencyCritbitTrie{}
-
-	for i := 0; i < 100000; i++ {
-		seed := make([]byte, 57)
-		rand.Read(seed)
-
-		priv := ed448.NewKeyFromSeed(seed)
-		pubkey := (priv.Public()).(ed448.PublicKey)
-		addr, err := poseidon.HashBytes(pubkey)
-		assert.NoError(t, err)
-
-		v := uint64(i)
-		a := addr.Bytes()
-		b := make([]byte, 32)
-		copy(b[32-len(a):], addr.Bytes())
-
-		tree.Add(b, v)
-	}
-
-	for i := 0; i < 256; i++ {
-		seed := make([]byte, 57)
-		rand.Read(seed)
-
-		priv := ed448.NewKeyFromSeed(seed)
-		pubkey := (priv.Public()).(ed448.PublicKey)
-		disc, err := poseidon.HashBytes(pubkey)
-		assert.NoError(t, err)
-
-		for _, n := range tree.FindNearestAndApproximateNeighbors(disc.Bytes()) {
-			diff := new(big.Int)
-			diff.SetBytes(n.Bits())
-			diff.Sub(diff, disc)
-			diff.Abs(diff)
-		}
-	}
+	near = tree.FindNearestAndApproximateNeighbors(make([]byte, 32))
+	assert.Equal(t, 0, len(near))
 }

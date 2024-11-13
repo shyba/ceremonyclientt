@@ -1,11 +1,7 @@
 package tries
 
-import (
-	"math/big"
-)
-
 type Item interface {
-	Priority() *big.Int
+	Priority() uint64
 }
 
 type MinHeap[I Item] struct {
@@ -51,7 +47,7 @@ func (h *MinHeap[I]) Size() int {
 func (h *MinHeap[I]) upheap(i int) {
 	for i > 0 {
 		parent := (i - 1) / 2
-		if h.items[i].Priority().Cmp(h.items[parent].Priority()) >= 0 {
+		if h.items[i].Priority() >= h.items[parent].Priority() {
 			break
 		}
 		h.items[i], h.items[parent] = h.items[parent], h.items[i]
@@ -66,11 +62,11 @@ func (h *MinHeap[I]) downheap(i int) {
 		smallest := i
 
 		if left < len(h.items) &&
-			h.items[left].Priority().Cmp(h.items[smallest].Priority()) < 0 {
+			h.items[left].Priority() < h.items[smallest].Priority() {
 			smallest = left
 		}
 		if right < len(h.items) &&
-			h.items[right].Priority().Cmp(h.items[smallest].Priority()) < 0 {
+			h.items[right].Priority() < h.items[smallest].Priority() {
 			smallest = right
 		}
 

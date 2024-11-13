@@ -74,8 +74,8 @@ func ToSerializedMap(m *PeerSeniority) map[string]uint64 {
 	return s
 }
 
-func (p PeerSeniorityItem) Priority() *big.Int {
-	return big.NewInt(int64(p.seniority))
+func (p PeerSeniorityItem) Priority() uint64 {
+	return p.seniority
 }
 
 type TokenExecutionEngine struct {
@@ -226,6 +226,46 @@ func NewTokenExecutionEngine(
 		alwaysSend = true
 	}
 
+	restore := func() []*tries.RollingFrecencyCritbitTrie {
+		frame, _, err := clockStore.GetLatestDataClockFrame(intrinsicFilter)
+		if err != nil && !errors.Is(err, store.ErrNotFound) {
+			panic(err)
+		}
+
+		tries := []*tries.RollingFrecencyCritbitTrie{
+			&tries.RollingFrecencyCritbitTrie{},
+		}
+		for _, key := range proverKeys {
+			addr, _ := poseidon.HashBytes(key)
+			tries[0].Add(addr.FillBytes(make([]byte, 32)), 0)
+			if err = clockStore.SetProverTriesForFrame(frame, tries); err != nil {
+				panic(err)
+			}
+		}
+		peerSeniority, err = RebuildPeerSeniority(uint(cfg.P2P.Network))
+		if err != nil {
+			panic(err)
+		}
+
+		txn, err := clockStore.NewTransaction()
+		if err != nil {
+			panic(err)
+		}
+
+		err = clockStore.PutPeerSeniorityMap(txn, intrinsicFilter, peerSeniority)
+		if err != nil {
+			txn.Abort()
+			panic(err)
+		}
+
+		if err = txn.Commit(); err != nil {
+			txn.Abort()
+			panic(err)
+		}
+
+		return tries
+	}
+
 	dataTimeReel := time.NewDataTimeReel(
 		intrinsicFilter,
 		logger,
@@ -256,6 +296,7 @@ func NewTokenExecutionEngine(
 		inclusionProof,
 		proverKeys,
 		alwaysSend,
+		restore,
 	)
 
 	e.clock = data.NewDataClockConsensusEngine(
@@ -591,6 +632,10 @@ func (e *TokenExecutionEngine) ProcessFrame(
 				peerIds = append(peerIds, peerId.String())
 			}
 
+			logger := e.logger.Debug
+			if peerIds[0] == peer.ID(e.pubSub.GetPeerID()).String() {
+				logger = e.logger.Info
+			}
 			mergeable := true
 			for i, peerId := range peerIds {
 				addr, err := e.getAddressFromSignature(
@@ -603,7 +648,7 @@ func (e *TokenExecutionEngine) ProcessFrame(
 
 				sen, ok := (*e.peerSeniority)[string(addr)]
 				if !ok {
-					e.logger.Debug(
+					logger(
 						"peer announced with no seniority",
 						zap.String("peer_id", peerId),
 					)
@@ -612,7 +657,7 @@ func (e *TokenExecutionEngine) ProcessFrame(
 
 				peer := new(big.Int).SetUint64(sen.seniority)
 				if peer.Cmp(GetAggregatedSeniority([]string{peerId})) != 0 {
-					e.logger.Debug(
+					logger(
 						"peer announced but is already different seniority",
 						zap.String("peer_id", peerIds[0]),
 					)
@@ -637,6 +682,9 @@ func (e *TokenExecutionEngine) ProcessFrame(
 					return nil, errors.Wrap(err, "process frame")
 				}
 
+				aggregated := GetAggregatedSeniority(peerIds).Uint64()
+				logger("peer has merge, aggregated seniority", zap.Uint64("seniority", aggregated))
+
 				for _, pr := range prfs {
 					if pr.IndexProof == nil && pr.Difficulty == 0 && pr.Commitment == nil {
 						// approximate average per interval:
@@ -646,11 +694,16 @@ func (e *TokenExecutionEngine) ProcessFrame(
 							add = big.NewInt(4000000)
 						}
 						additional = add.Uint64()
+						logger("1.4.19-21 seniority", zap.Uint64("seniority", additional))
 					}
 				}
 
+				total := aggregated + additional
+
+				logger("combined aggregate and 1.4.19-21 seniority", zap.Uint64("seniority", total))
+
 				(*e.peerSeniority)[string(addr)] = PeerSeniorityItem{
-					seniority: GetAggregatedSeniority(peerIds).Uint64() + additional,
+					seniority: aggregated + additional,
 					addr:      string(addr),
 				}
 
@@ -667,6 +720,61 @@ func (e *TokenExecutionEngine) ProcessFrame(
 						seniority: 0,
 						addr:      string(addr),
 					}
+				}
+			} else {
+				addr, err := e.getAddressFromSignature(
+					o.Announce.PublicKeySignaturesEd448[0],
+				)
+				if err != nil {
+					txn.Abort()
+					return nil, errors.Wrap(err, "process frame")
+				}
+
+				sen, ok := (*e.peerSeniority)[string(addr)]
+				if !ok {
+					logger(
+						"peer announced with no seniority",
+						zap.String("peer_id", peerIds[0]),
+					)
+					continue
+				}
+
+				peer := new(big.Int).SetUint64(sen.seniority)
+				if peer.Cmp(GetAggregatedSeniority([]string{peerIds[0]})) != 0 {
+					logger(
+						"peer announced but is already different seniority",
+						zap.String("peer_id", peerIds[0]),
+					)
+					continue
+				}
+
+				additional := uint64(0)
+				_, prfs, err := e.coinStore.GetPreCoinProofsForOwner(addr)
+				if err != nil && !errors.Is(err, store.ErrNotFound) {
+					txn.Abort()
+					return nil, errors.Wrap(err, "process frame")
+				}
+
+				aggregated := GetAggregatedSeniority(peerIds).Uint64()
+				logger("peer does not have merge, pre-1.4.19 seniority", zap.Uint64("seniority", aggregated))
+
+				for _, pr := range prfs {
+					if pr.IndexProof == nil && pr.Difficulty == 0 && pr.Commitment == nil {
+						// approximate average per interval:
+						add := new(big.Int).SetBytes(pr.Amount)
+						add.Quo(add, big.NewInt(58800000))
+						if add.Cmp(big.NewInt(4000000)) > 0 {
+							add = big.NewInt(4000000)
+						}
+						additional = add.Uint64()
+						logger("1.4.19-21 seniority", zap.Uint64("seniority", additional))
+					}
+				}
+				total := GetAggregatedSeniority([]string{peerIds[0]}).Uint64() + additional
+				logger("combined aggregate and 1.4.19-21 seniority", zap.Uint64("seniority", total))
+				(*e.peerSeniority)[string(addr)] = PeerSeniorityItem{
+					seniority: total,
+					addr:      string(addr),
 				}
 			}
 		case *protobufs.TokenOutput_Join:
@@ -719,7 +827,8 @@ func (e *TokenExecutionEngine) ProcessFrame(
 				if (*e.peerSeniority)[addr].seniority > o.Penalty.Quantity {
 					for _, t := range app.Tries {
 						if t.Contains([]byte(addr)) {
-							_, latest, _ := t.Get([]byte(addr))
+							v := t.Get([]byte(addr))
+							latest := v.LatestFrame
 							if frame.FrameNumber-latest > 100 {
 								proverTrieLeaveRequests = append(proverTrieLeaveRequests, []byte(addr))
 							}
@@ -789,7 +898,8 @@ func (e *TokenExecutionEngine) ProcessFrame(
 		return nil, errors.Wrap(err, "process frame")
 	}
 
-	if frame.FrameNumber == application.PROOF_FRAME_RING_RESET {
+	if frame.FrameNumber == application.PROOF_FRAME_RING_RESET ||
+		frame.FrameNumber == application.PROOF_FRAME_RING_RESET_2 {
 		e.logger.Info("performing ring reset")
 		seniorityMap, err := RebuildPeerSeniority(e.pubSub.GetNetwork())
 		if err != nil {
@@ -810,7 +920,6 @@ func (e *TokenExecutionEngine) ProcessFrame(
 			txn.Abort()
 			return nil, errors.Wrap(err, "process frame")
 		}
-
 	}
 
 	return app.Tries, nil
@@ -852,8 +961,8 @@ func ProcessJoinsAndLeaves(
 			for _, t := range app.Tries[1:] {
 				nodes := t.FindNearestAndApproximateNeighbors(make([]byte, 32))
 				for _, n := range nodes {
-					if n.External.LatestFrame < frame.FrameNumber-1000 {
-						t.Remove(n.External.Key)
+					if n.LatestFrame < frame.FrameNumber-1000 {
+						t.Remove(n.Key)
 					}
 				}
 			}
@@ -867,7 +976,7 @@ func ProcessJoinsAndLeaves(
 				nextSet := t.FindNearestAndApproximateNeighbors(make([]byte, 32))
 				eligibilityOrder := tries.NewMinHeap[PeerSeniorityItem]()
 				for _, n := range nextSet {
-					eligibilityOrder.Push((*seniority)[string(n.External.Key)])
+					eligibilityOrder.Push((*seniority)[string(n.Key)])
 				}
 				process := eligibilityOrder.All()
 				slices.Reverse(process)
@@ -1033,7 +1142,7 @@ func (e *TokenExecutionEngine) GetSeniority() *big.Int {
 		return big.NewInt(0)
 	}
 
-	return sen.Priority()
+	return new(big.Int).SetUint64(sen.Priority())
 }
 
 func GetAggregatedSeniority(peerIds []string) *big.Int {
@@ -1144,11 +1253,11 @@ func GetAggregatedSeniority(peerIds []string) *big.Int {
 	)
 }
 
-func (e *TokenExecutionEngine) AnnounceProverMerge() {
+func (e *TokenExecutionEngine) AnnounceProverMerge() *protobufs.AnnounceProverRequest {
 	currentHead := e.GetFrame()
 	if currentHead == nil ||
 		currentHead.FrameNumber < application.PROOF_FRAME_CUTOFF {
-		return
+		return nil
 	}
 	keys := [][]byte{}
 	ksigs := [][]byte{}
@@ -1197,14 +1306,12 @@ func (e *TokenExecutionEngine) AnnounceProverMerge() {
 		panic(err)
 	}
 
-	announce := &protobufs.TokenRequest_Announce{
-		Announce: &protobufs.AnnounceProverRequest{
-			PublicKeySignaturesEd448: []*protobufs.Ed448Signature{},
-		},
+	announce := &protobufs.AnnounceProverRequest{
+		PublicKeySignaturesEd448: []*protobufs.Ed448Signature{},
 	}
 
-	announce.Announce.PublicKeySignaturesEd448 = append(
-		announce.Announce.PublicKeySignaturesEd448,
+	announce.PublicKeySignaturesEd448 = append(
+		announce.PublicKeySignaturesEd448,
 		&protobufs.Ed448Signature{
 			PublicKey: &protobufs.Ed448PublicKey{
 				KeyValue: e.pubSub.GetPublicKey(),
@@ -1214,8 +1321,8 @@ func (e *TokenExecutionEngine) AnnounceProverMerge() {
 	)
 
 	for i := range keys {
-		announce.Announce.PublicKeySignaturesEd448 = append(
-			announce.Announce.PublicKeySignaturesEd448,
+		announce.PublicKeySignaturesEd448 = append(
+			announce.PublicKeySignaturesEd448,
 			&protobufs.Ed448Signature{
 				PublicKey: &protobufs.Ed448PublicKey{
 					KeyValue: keys[i],
@@ -1225,11 +1332,7 @@ func (e *TokenExecutionEngine) AnnounceProverMerge() {
 		)
 	}
 
-	req := &protobufs.TokenRequest{
-		Request: announce,
-	}
-
-	e.publishMessage(append([]byte{0x00}, e.intrinsicFilter...), req)
+	return announce
 }
 
 func (e *TokenExecutionEngine) AnnounceProverJoin() {
@@ -1259,6 +1362,7 @@ func (e *TokenExecutionEngine) AnnounceProverJoin() {
 							KeyValue: e.pubSub.GetPublicKey(),
 						},
 					},
+					Announce: e.AnnounceProverMerge(),
 				},
 			},
 		},

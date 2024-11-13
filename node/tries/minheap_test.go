@@ -1,7 +1,6 @@
 package tries_test
 
 import (
-	"math/big"
 	"testing"
 
 	"source.quilibrium.com/quilibrium/monorepo/node/tries"
@@ -9,15 +8,15 @@ import (
 
 type TestItem struct {
 	value    string
-	priority *big.Int
+	priority uint64
 }
 
-func (t TestItem) Priority() *big.Int {
+func (t TestItem) Priority() uint64 {
 	return t.priority
 }
 
-func newTestItem(value string, priority int64) TestItem {
-	return TestItem{value: value, priority: big.NewInt(priority)}
+func newTestItem(value string, priority uint64) TestItem {
+	return TestItem{value: value, priority: priority}
 }
 
 func TestNewMinHeap(t *testing.T) {
@@ -61,7 +60,7 @@ func TestPeek(t *testing.T) {
 	if !ok {
 		t.Error("Peek on non-empty heap should return true")
 	}
-	if item.value != "test" || item.priority.Cmp(big.NewInt(1)) != 0 {
+	if item.value != "test" || item.priority != 1 {
 		t.Errorf("Peek returned unexpected item: %v", item)
 	}
 }
@@ -82,7 +81,7 @@ func TestPop(t *testing.T) {
 	if !ok {
 		t.Error("Pop on non-empty heap should return true")
 	}
-	if item.value != "test1" || item.priority.Cmp(big.NewInt(1)) != 0 {
+	if item.value != "test1" || item.priority != 1 {
 		t.Errorf("Pop returned unexpected item: %v", item)
 	}
 	if heap.Size() != 1 {
@@ -96,13 +95,13 @@ func TestHeapOrder(t *testing.T) {
 	heap.Push(newTestItem("test1", 1))
 	heap.Push(newTestItem("test2", 2))
 
-	expected := []int64{1, 2, 3}
+	expected := []uint64{1, 2, 3}
 	for i, exp := range expected {
 		item, ok := heap.Pop()
 		if !ok {
 			t.Fatalf("Failed to pop item %d", i)
 		}
-		if item.priority.Cmp(big.NewInt(exp)) != 0 {
+		if item.priority != exp {
 			t.Errorf("Item %d: expected priority %d, got %v", i, exp, item.priority)
 		}
 	}

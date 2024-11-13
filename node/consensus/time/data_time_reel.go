@@ -62,6 +62,7 @@ type DataTimeReel struct {
 	badFrameCh      chan *protobufs.ClockFrame
 	done            chan bool
 	alwaysSend      bool
+	restore         func() []*tries.RollingFrecencyCritbitTrie
 }
 
 func NewDataTimeReel(
@@ -82,6 +83,7 @@ func NewDataTimeReel(
 	initialInclusionProof *crypto.InclusionAggregateProof,
 	initialProverKeys [][]byte,
 	alwaysSend bool,
+	restore func() []*tries.RollingFrecencyCritbitTrie,
 ) *DataTimeReel {
 	if filter == nil {
 		panic("filter is nil")
@@ -131,6 +133,7 @@ func NewDataTimeReel(
 		badFrameCh:      make(chan *protobufs.ClockFrame),
 		done:            make(chan bool),
 		alwaysSend:      alwaysSend,
+		restore:         restore,
 	}
 }
 
@@ -145,6 +148,10 @@ func (d *DataTimeReel) Start() error {
 		d.totalDistance = big.NewInt(0)
 		d.headDistance = big.NewInt(0)
 	} else {
+		if len(tries[0].FindNearestAndApproximateNeighbors(make([]byte, 32))) == 0 {
+			d.logger.Info("encountered trie corruption, invoking restoration")
+			tries = d.restore()
+		}
 		d.head = frame
 		if err != nil {
 			panic(err)
@@ -748,7 +755,7 @@ func (d *DataTimeReel) GetDistance(frame *protobufs.ClockFrame) (
 
 	discriminatorNode :=
 		d.proverTries[0].FindNearest(prevSelector.FillBytes(make([]byte, 32)))
-	discriminator := discriminatorNode.External.Key
+	discriminator := discriminatorNode.Key
 	addr, err := frame.GetAddress()
 	if err != nil {
 		return unknownDistance, errors.Wrap(err, "get distance")

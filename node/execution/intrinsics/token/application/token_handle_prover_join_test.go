@@ -70,7 +70,6 @@ func TestHandleProverJoin(t *testing.T) {
 	}
 
 	addr := addrBI.FillBytes(make([]byte, 32))
-
 	payload := []byte("join")
 	payload = binary.BigEndian.AppendUint64(payload, 0)
 	payload = append(payload, bytes.Repeat([]byte{0xff}, 32)...)

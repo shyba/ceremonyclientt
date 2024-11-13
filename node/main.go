@@ -981,7 +981,8 @@ func processFrame(
 				if (*peerSeniority)[addr].GetSeniority() > o.Penalty.Quantity {
 					for _, t := range app.Tries {
 						if t.Contains([]byte(addr)) {
-							_, latest, _ := t.Get([]byte(addr))
+							v := t.Get([]byte(addr))
+							latest := v.LatestFrame
 							if frame.FrameNumber-latest > 100 {
 								proverTrieLeaveRequests = append(proverTrieLeaveRequests, []byte(addr))
 							}

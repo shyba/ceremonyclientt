@@ -94,6 +94,10 @@ type ClockStore interface {
 		filter []byte,
 		seniorityMap map[string]uint64,
 	) error
+	SetProverTriesForFrame(
+		frame *protobufs.ClockFrame,
+		tries []*tries.RollingFrecencyCritbitTrie,
+	) error
 }
 
 type PebbleClockStore struct {
@@ -1528,4 +1532,25 @@ func (p *PebbleClockStore) PutPeerSeniorityMap(
 		txn.Set(clockDataSeniorityKey(filter), b.Bytes()),
 		"put peer seniority map",
 	)
+}
+
+func (p *PebbleClockStore) SetProverTriesForFrame(
+	frame *protobufs.ClockFrame,
+	tries []*tries.RollingFrecencyCritbitTrie,
+) error {
+	for i, proverTrie := range tries {
+		proverData, err := proverTrie.Serialize()
+		if err != nil {
+			return errors.Wrap(err, "set prover tries for frame")
+		}
+
+		if err = p.db.Set(
+			clockProverTrieKey(frame.Filter, uint16(i), frame.FrameNumber),
+			proverData,
+		); err != nil {
+			return errors.Wrap(err, "set prover tries for frame")
+		}
+	}
+
+	return nil
 }

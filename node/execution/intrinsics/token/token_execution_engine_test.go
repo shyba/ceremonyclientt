@@ -14,7 +14,7 @@ import (
 func TestProcessJoinsAndLeaves(t *testing.T) {
 	set := [][]byte{}
 	for i := 0; i < 6000; i++ {
-		b := make([]byte, 32)
+		b := make([]byte, 9999)
 		rand.Read(b)
 		set = append(set, b)
 	}
@@ -32,7 +32,7 @@ func TestProcessJoinsAndLeaves(t *testing.T) {
 	app := &application.TokenApplication{
 		Tries: tr,
 	}
-	token.ProcessJoinsAndLeaves(joins, []token.PeerSeniorityItem{}, app, seniority, &protobufs.ClockFrame{FrameNumber: 20})
+	token.ProcessJoinsAndLeaves(joins, []token.PeerSeniorityItem{}, app, seniority, &protobufs.ClockFrame{FrameNumber: 9999})
 
 	assert.Equal(t, len(app.Tries), 4)
 	assert.Equal(t, len(app.Tries[1].FindNearestAndApproximateNeighbors(make([]byte, 32))), 2048)
@@ -40,13 +40,16 @@ func TestProcessJoinsAndLeaves(t *testing.T) {
 	assert.Equal(t, len(app.Tries[3].FindNearestAndApproximateNeighbors(make([]byte, 32))), 1904)
 
 	leaves := []token.PeerSeniorityItem{}
+	// Seniority works from highest to lowest, so we should have one removal in the bottom most, three in the middle, and one in the highest
 	leaves = append(leaves, joins[30])
+	leaves = append(leaves, joins[1907])
+	leaves = append(leaves, joins[1955])
 	leaves = append(leaves, joins[2047])
 	leaves = append(leaves, joins[4095])
-	token.ProcessJoinsAndLeaves([]token.PeerSeniorityItem{}, leaves, app, seniority, &protobufs.ClockFrame{FrameNumber: 20})
+	token.ProcessJoinsAndLeaves([]token.PeerSeniorityItem{}, leaves, app, seniority, &protobufs.ClockFrame{FrameNumber: 10000})
 
 	assert.Equal(t, len(app.Tries), 4)
 	assert.Equal(t, len(app.Tries[1].FindNearestAndApproximateNeighbors(make([]byte, 32))), 2048)
 	assert.Equal(t, len(app.Tries[2].FindNearestAndApproximateNeighbors(make([]byte, 32))), 2048)
-	assert.Equal(t, len(app.Tries[3].FindNearestAndApproximateNeighbors(make([]byte, 32))), 1901)
+	assert.Equal(t, len(app.Tries[3].FindNearestAndApproximateNeighbors(make([]byte, 32))), 1899)
 }

@@ -2,7 +2,6 @@ package protobufs
 
 import (
 	"encoding/binary"
-	"math/big"
 
 	"github.com/iden3/go-iden3-crypto/poseidon"
 	pcrypto "github.com/libp2p/go-libp2p/core/crypto"
@@ -10,14 +9,14 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (t *TokenRequest) Priority() *big.Int {
+func (t *TokenRequest) Priority() uint64 {
 	switch p := t.Request.(type) {
 	case *TokenRequest_Mint:
 		if len(p.Mint.Proofs) >= 3 {
-			return new(big.Int).SetBytes(p.Mint.Proofs[2])
+			return binary.BigEndian.Uint64(p.Mint.Proofs[2])
 		}
 	}
-	return big.NewInt(0)
+	return 0
 }
 
 func (t *MintCoinRequest) RingAndParallelism(

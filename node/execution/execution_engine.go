@@ -19,6 +19,5 @@ type ExecutionEngine interface {
 	GetFrame() *protobufs.ClockFrame
 	GetSeniority() *big.Int
 	GetRingPosition() int
-	AnnounceProverMerge()
 	AnnounceProverJoin()
 }

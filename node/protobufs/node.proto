@@ -181,6 +181,7 @@ message AnnounceProverJoin {
   bytes filter = 1;
   uint64 frame_number = 2;
   quilibrium.node.keys.pb.Ed448Signature public_key_signature_ed448 = 3;
+  AnnounceProverRequest announce = 4;
 }
 
 message AnnounceProverLeave {
