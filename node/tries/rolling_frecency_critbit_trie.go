@@ -274,6 +274,13 @@ func (t *RollingFrecencyCritbitTrie) Remove(address []byte) {
 		return
 	}
 
+	if t.Root.External != nil {
+		if bytes.Equal(t.Root.External.Key, address) {
+			t.Root = nil
+		}
+		return
+	}
+
 	blen := uint32(len(address))
 	var gp *Node
 	p := t.Root

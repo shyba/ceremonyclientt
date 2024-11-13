@@ -2,6 +2,7 @@ package tries_test
 
 import (
 	"crypto/rand"
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -49,6 +50,28 @@ func TestSerializers(t *testing.T) {
 		for i, n := range tree.FindNearestAndApproximateNeighbors(disc.Bytes()) {
 			assert.Equal(t, n.Bits(), newTreeNeighbors[i].Bits())
 		}
+	}
+}
+
+func TestCritbitReinit(t *testing.T) {
+	tree := &tries.RollingFrecencyCritbitTrie{}
+	set := [][]byte{}
+	for i := 0; i < 1024; i++ {
+		seed := make([]byte, 32)
+		rand.Read(seed)
+		set = append(set, seed)
+		tree.Add(seed, 14)
+		tree.Remove(seed)
+	}
+	for i := 0; i < 1024; i++ {
+		tree.Add(set[i], 14)
+	}
+	for i := 0; i < 1024; i++ {
+		tree.Remove(set[i])
+	}
+	near := tree.FindNearestAndApproximateNeighbors(make([]byte, 32))
+	for _, n := range near {
+		fmt.Println(n.External.Key)
 	}
 }
 

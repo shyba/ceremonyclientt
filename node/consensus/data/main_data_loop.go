@@ -149,6 +149,10 @@ func (e *DataClockConsensusEngine) processFrame(
 					break
 				}
 			} else {
+				if e.previousFrameProven.FrameNumber == latestFrame.FrameNumber {
+					return latestFrame
+				}
+
 				h, err := poseidon.HashBytes(e.pubSub.GetPeerID())
 				if err != nil {
 					panic(err)
@@ -232,6 +236,7 @@ func (e *DataClockConsensusEngine) processFrame(
 					)
 					return latestFrame
 				}
+				e.previousFrameProven = latestFrame
 				e.previousTree = proofTree
 
 				sig, err := e.pubSub.SignMessage(

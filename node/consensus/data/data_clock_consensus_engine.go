@@ -121,6 +121,7 @@ type DataClockConsensusEngine struct {
 	report                         *protobufs.SelfTestReport
 	clients                        []protobufs.DataIPCServiceClient
 	grpcRateLimiter                *RateLimiter
+	previousFrameProven            *protobufs.ClockFrame
 	previousTree                   *mt.MerkleTree
 	clientReconnectTest            int
 }
