@@ -59,6 +59,7 @@ func (e *DataClockConsensusEngine) runLoop() {
 
 			select {
 			case dataFrame := <-dataFrameCh:
+				runOnce = false
 				if e.GetFrameProverTries()[0].Contains(e.provingKeyAddress) {
 					if err = e.publishProof(dataFrame); err != nil {
 						e.logger.Error("could not publish", zap.Error(err))
