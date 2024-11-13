@@ -18,10 +18,9 @@ import (
 	"source.quilibrium.com/quilibrium/monorepo/node/tries"
 )
 
-const PROOF_FRAME_CUTOFF = 1
-const PROOF_FRAME_RING_RESET = 5750
-const PROOF_FRAME_RING_RESET_2 = 7650
-const PROOF_FRAME_RING_RESET_3 = 13369
+const PROOF_FRAME_CUTOFF = 46500
+const PROOF_FRAME_RING_RESET = 52000
+const PROOF_FRAME_RING_RESET_2 = 53028
 
 func (a *TokenApplication) handleMint(
 	currentFrameNumber uint64,
