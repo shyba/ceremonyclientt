@@ -571,9 +571,11 @@ func (e *DataClockConsensusEngine) PerformTimeProof(
 				client.client.CalculateChallengeProof(
 					e.ctx,
 					&protobufs.ChallengeProofRequest{
-						PeerId:     e.pubSub.GetPeerID(),
-						Core:       uint32(i),
-						ClockFrame: frame,
+						PeerId:      e.pubSub.GetPeerID(),
+						Core:        uint32(i),
+						Output:      frame.Output,
+						FrameNumber: frame.FrameNumber,
+						Difficulty:  frame.Difficulty,
 					},
 				)
 			if err != nil {
