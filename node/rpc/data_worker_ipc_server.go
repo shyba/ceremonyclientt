@@ -76,7 +76,7 @@ func (r *DataWorkerIPCServer) CalculateChallengeProof(
 
 	proof, err := r.prover.CalculateChallengeProof(
 		challenge,
-		req.Difficulty,
+		difficulty,
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "calculate challenge proof")
