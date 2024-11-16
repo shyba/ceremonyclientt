@@ -281,6 +281,7 @@ func (e *DataClockConsensusEngine) processFrame(
 							},
 						},
 					},
+					Timestamp: time.Now().UnixMilli(),
 				})
 
 				if e.config.Engine.AutoMergeCoins {
@@ -321,6 +322,7 @@ func (e *DataClockConsensusEngine) processFrame(
 									},
 								},
 							},
+							Timestamp: time.Now().UnixMilli(),
 						})
 					}
 				}
