@@ -45,6 +45,8 @@ import (
 	blossomsub "source.quilibrium.com/quilibrium/monorepo/go-libp2p-blossomsub"
 	"source.quilibrium.com/quilibrium/monorepo/go-libp2p-blossomsub/pb"
 	"source.quilibrium.com/quilibrium/monorepo/node/config"
+	qgrpc "source.quilibrium.com/quilibrium/monorepo/node/internal/grpc"
+	"source.quilibrium.com/quilibrium/monorepo/node/internal/observability"
 	"source.quilibrium.com/quilibrium/monorepo/node/p2p/internal"
 	"source.quilibrium.com/quilibrium/monorepo/node/protobufs"
 )
@@ -418,6 +420,7 @@ func NewBlossomSub(
 			OpportunisticGraftThreshold: 2,
 		},
 	))
+	blossomOpts = append(blossomOpts, observability.WithPrometheusRawTracer())
 	blossomOpts = append(blossomOpts, blossomsub.WithPeerFilter(internal.NewStaticPeerFilter(
 		// We filter out the bootstrap peers explicitly from BlossomSub
 		// as they do not subscribe to relevant topics anymore.
@@ -917,7 +920,7 @@ func (b *BlossomSub) GetDirectChannel(key []byte, purpose string) (
 
 	// Open question: should we prefix this so a node can run both in mainnet and
 	// testnet? Feels like a bad idea and would be preferable to discourage.
-	dialCtx, err = grpc.DialContext(
+	dialCtx, err = qgrpc.DialContext(
 		b.ctx,
 		base58.Encode(key),
 		grpc.WithDialer(
