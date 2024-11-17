@@ -19,9 +19,10 @@ import (
 )
 
 // for tests, these need to be var
-var PROOF_FRAME_CUTOFF = uint64(46500)
-var PROOF_FRAME_RING_RESET = uint64(52000)
-var PROOF_FRAME_RING_RESET_2 = uint64(53028)
+const PROOF_FRAME_CUTOFF = 1
+const PROOF_FRAME_RING_RESET = 5750
+const PROOF_FRAME_RING_RESET_2 = 7650
+const PROOF_FRAME_RING_RESET_3 = 13369
 
 func (a *TokenApplication) handleMint(
 	currentFrameNumber uint64,
