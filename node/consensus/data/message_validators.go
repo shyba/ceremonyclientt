@@ -65,7 +65,7 @@ func (e *DataClockConsensusEngine) validateTxMessage(peerID peer.ID, message *pb
 			if err != nil {
 				panic(err)
 			}
-			if frameNumber := binary.BigEndian.Uint64(mint.Proofs[2]); frameNumber+10 < head.FrameNumber {
+			if frameNumber := binary.BigEndian.Uint64(mint.Proofs[2]); frameNumber+2 < head.FrameNumber {
 				return p2p.ValidationResultIgnore
 			}
 		}
