@@ -30,8 +30,8 @@ const (
 
 // Defines the default BlossomSub parameters.
 var (
-	BlossomSubD                                = 6
-	BlossomSubDlo                              = 5
+	BlossomSubD                                = 8
+	BlossomSubDlo                              = 6
 	BlossomSubDhi                              = 12
 	BlossomSubDscore                           = 4
 	BlossomSubDout                             = 2
@@ -41,7 +41,7 @@ var (
 	BlossomSubGossipRetransmission             = 3
 	BlossomSubBitmaskWidth                     = 256
 	BlossomSubHeartbeatInitialDelay            = 100 * time.Millisecond
-	BlossomSubHeartbeatInterval                = 1 * time.Second
+	BlossomSubHeartbeatInterval                = 700 * time.Millisecond
 	BlossomSubFanoutTTL                        = 60 * time.Second
 	BlossomSubPrunePeers                       = 16
 	BlossomSubPruneBackoff                     = time.Minute
