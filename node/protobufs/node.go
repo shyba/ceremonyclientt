@@ -29,6 +29,7 @@ func (t *MintCoinRequest) RingAndParallelism(
 	if err := t.Signature.Verify(payload); err != nil {
 		return -1, 0, errors.New("invalid")
 	}
+
 	pk, err := pcrypto.UnmarshalEd448PublicKey(
 		t.Signature.PublicKey.KeyValue,
 	)

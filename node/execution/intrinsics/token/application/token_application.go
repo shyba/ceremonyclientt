@@ -1,8 +1,12 @@
 package application
 
 import (
+	"bytes"
 	"crypto"
+	"encoding/binary"
+	"sync"
 
+	"github.com/iden3/go-iden3-crypto/poseidon"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
@@ -148,35 +152,82 @@ func (a *TokenApplication) ApplyTransitions(
 
 	seen := map[string]struct{}{}
 
-	for _, transition := range requests {
+	set := make([]*protobufs.TokenRequest, len(requests))
+	fails := make([]*protobufs.TokenRequest, len(set))
+	outputsSet := make([][]*protobufs.TokenOutput, len(set))
+
+	for i, transition := range requests {
+		i := i
 		switch t := transition.Request.(type) {
 		case *protobufs.TokenRequest_Mint:
-			ring, parallelism, err := t.Mint.RingAndParallelism(
-				func(addr []byte) int {
-					if _, ok := seen[string(addr)]; ok {
-						return -1
-					}
+			if t == nil || t.Mint.Proofs == nil || t.Mint.Signature == nil {
+				continue
+			}
 
-					ring := -1
-					for i, t := range a.Tries[1:] {
-						if t.Contains(addr) {
-							ring = i
-							seen[string(addr)] = struct{}{}
-						}
-					}
+			payload := []byte("mint")
+			for _, p := range t.Mint.Proofs {
+				payload = append(payload, p...)
+			}
+			if err := t.Mint.Signature.Verify(payload); err != nil {
+				continue
+			}
 
-					return ring
-				},
+			addr, err := poseidon.HashBytes(
+				t.Mint.Signature.PublicKey.KeyValue,
 			)
 			if err != nil {
 				continue
 			}
 
-			parallelismMap[ring] = parallelismMap[ring] + uint64(parallelism)
+			if len(t.Mint.Proofs) == 1 && a.Tries[0].Contains(
+				addr.FillBytes(make([]byte, 32)),
+			) && bytes.Equal(t.Mint.Signature.PublicKey.KeyValue, a.Beacon) {
+				if _, ok := seen[string(t.Mint.Proofs[0][32:])]; !ok {
+					set[i] = transition
+					seen[string(t.Mint.Proofs[0][32:])] = struct{}{}
+				}
+			} else if len(t.Mint.Proofs) >= 3 && currentFrameNumber > PROOF_FRAME_CUTOFF {
+				frameNumber := binary.BigEndian.Uint64(t.Mint.Proofs[2])
+				if frameNumber < currentFrameNumber-2 {
+					fails[i] = transition
+					continue
+				}
+				ring, parallelism, err := t.Mint.RingAndParallelism(
+					func(addr []byte) int {
+						if _, ok := seen[string(addr)]; ok {
+							return -1
+						}
+
+						ring := -1
+						for i, t := range a.Tries[1:] {
+							if t.Contains(addr) {
+								ring = i
+								seen[string(addr)] = struct{}{}
+							}
+						}
+
+						return ring
+					},
+				)
+				if err == nil {
+					// fmt.Println(i, "checked ring test")
+					set[i] = transition
+					parallelismMap[ring] = parallelismMap[ring] + uint64(parallelism)
+				} else {
+					// fmt.Println(i, "failed ring test", err)
+					fails[i] = transition
+				}
+			}
+		default:
+			set[i] = transition
 		}
 	}
 
-	for _, transition := range requests {
+	successes := make([]*protobufs.TokenRequest, len(set))
+	for i, transition := range set {
+		if transition == nil {
+			continue
+		}
 	req:
 		switch t := transition.Request.(type) {
 		case *protobufs.TokenRequest_Announce:
@@ -194,11 +245,8 @@ func (a *TokenApplication) ApplyTransitions(
 				)
 				break req
 			}
-			outputs.Outputs = append(outputs.Outputs, success...)
-			finalizedTransitions.Requests = append(
-				finalizedTransitions.Requests,
-				transition,
-			)
+			outputsSet[i] = success
+			successes[i] = transition
 		case *protobufs.TokenRequest_Join:
 			success, err := a.handleDataAnnounceProverJoin(
 				currentFrameNumber,
@@ -212,17 +260,11 @@ func (a *TokenApplication) ApplyTransitions(
 						"apply transitions",
 					)
 				}
-				failedTransitions.Requests = append(
-					failedTransitions.Requests,
-					transition,
-				)
+				fails[i] = transition
 				break req
 			}
-			outputs.Outputs = append(outputs.Outputs, success...)
-			finalizedTransitions.Requests = append(
-				finalizedTransitions.Requests,
-				transition,
-			)
+			outputsSet[i] = success
+			successes[i] = transition
 		case *protobufs.TokenRequest_Leave:
 			success, err := a.handleDataAnnounceProverLeave(
 				currentFrameNumber,
@@ -236,17 +278,11 @@ func (a *TokenApplication) ApplyTransitions(
 						"apply transitions",
 					)
 				}
-				failedTransitions.Requests = append(
-					failedTransitions.Requests,
-					transition,
-				)
+				fails[i] = transition
 				break req
 			}
-			outputs.Outputs = append(outputs.Outputs, success...)
-			finalizedTransitions.Requests = append(
-				finalizedTransitions.Requests,
-				transition,
-			)
+			outputsSet[i] = success
+			successes[i] = transition
 		case *protobufs.TokenRequest_Resume:
 			success, err := a.handleDataAnnounceProverResume(
 				currentFrameNumber,
@@ -260,17 +296,11 @@ func (a *TokenApplication) ApplyTransitions(
 						"apply transitions",
 					)
 				}
-				failedTransitions.Requests = append(
-					failedTransitions.Requests,
-					transition,
-				)
+				fails[i] = transition
 				break req
 			}
-			outputs.Outputs = append(outputs.Outputs, success...)
-			finalizedTransitions.Requests = append(
-				finalizedTransitions.Requests,
-				transition,
-			)
+			outputsSet[i] = success
+			successes[i] = transition
 		case *protobufs.TokenRequest_Pause:
 			success, err := a.handleDataAnnounceProverPause(
 				currentFrameNumber,
@@ -284,17 +314,11 @@ func (a *TokenApplication) ApplyTransitions(
 						"apply transitions",
 					)
 				}
-				failedTransitions.Requests = append(
-					failedTransitions.Requests,
-					transition,
-				)
+				fails[i] = transition
 				break req
 			}
-			outputs.Outputs = append(outputs.Outputs, success...)
-			finalizedTransitions.Requests = append(
-				finalizedTransitions.Requests,
-				transition,
-			)
+			outputsSet[i] = success
+			successes[i] = transition
 		case *protobufs.TokenRequest_Merge:
 			success, err := a.handleMerge(currentFrameNumber, lockMap, t.Merge)
 			if err != nil {
@@ -304,17 +328,11 @@ func (a *TokenApplication) ApplyTransitions(
 						"apply transitions",
 					)
 				}
-				failedTransitions.Requests = append(
-					failedTransitions.Requests,
-					transition,
-				)
+				fails[i] = transition
 				break req
 			}
-			outputs.Outputs = append(outputs.Outputs, success...)
-			finalizedTransitions.Requests = append(
-				finalizedTransitions.Requests,
-				transition,
-			)
+			outputsSet[i] = success
+			successes[i] = transition
 		case *protobufs.TokenRequest_Split:
 			success, err := a.handleSplit(currentFrameNumber, lockMap, t.Split)
 			if err != nil {
@@ -324,17 +342,11 @@ func (a *TokenApplication) ApplyTransitions(
 						"apply transitions",
 					)
 				}
-				failedTransitions.Requests = append(
-					failedTransitions.Requests,
-					transition,
-				)
+				fails[i] = transition
 				break req
 			}
-			outputs.Outputs = append(outputs.Outputs, success...)
-			finalizedTransitions.Requests = append(
-				finalizedTransitions.Requests,
-				transition,
-			)
+			outputsSet[i] = success
+			successes[i] = transition
 		case *protobufs.TokenRequest_Transfer:
 			success, err := a.handleTransfer(currentFrameNumber, lockMap, t.Transfer)
 			if err != nil {
@@ -344,47 +356,87 @@ func (a *TokenApplication) ApplyTransitions(
 						"apply transitions",
 					)
 				}
-				failedTransitions.Requests = append(
-					failedTransitions.Requests,
-					transition,
-				)
+				fails[i] = transition
 				break req
 			}
-			outputs.Outputs = append(outputs.Outputs, success...)
-			finalizedTransitions.Requests = append(
-				finalizedTransitions.Requests,
-				transition,
-			)
+			outputsSet[i] = success
+			successes[i] = transition
+		}
+	}
+
+	wg := sync.WaitGroup{}
+	for _, transition := range set {
+		if transition == nil {
+			continue
+		}
+
+		transition := transition
+		switch transition.Request.(type) {
 		case *protobufs.TokenRequest_Mint:
-			success, err := a.handleMint(
-				currentFrameNumber,
-				lockMap,
-				t.Mint,
-				frame,
-				parallelismMap,
-			)
-			if err != nil {
-				if !skipFailures {
-					return nil, nil, nil, errors.Wrap(
-						err,
-						"apply transitions",
-					)
-				}
-				failedTransitions.Requests = append(
-					failedTransitions.Requests,
-					transition,
+			wg.Add(1)
+		}
+	}
+	for i, transition := range set {
+		if transition == nil {
+			continue
+		}
+
+		i := i
+		transition := transition
+		switch t := transition.Request.(type) {
+		case *protobufs.TokenRequest_Mint:
+			go func() {
+				defer wg.Done()
+				success, err := a.handleMint(
+					currentFrameNumber,
+					t.Mint,
+					frame,
+					parallelismMap,
 				)
-				break req
+				if err != nil {
+					fails[i] = transition
+					return
+				}
+				outputsSet[i] = success
+				successes[i] = transition
+			}()
+		}
+	}
+
+	wg.Wait()
+
+	finalFails := []*protobufs.TokenRequest{}
+	for _, fail := range fails {
+		if fail != nil {
+			finalFails = append(finalFails, fail)
+		}
+	}
+	if len(finalFails) != 0 && !skipFailures {
+		return nil, nil, nil, errors.Wrap(
+			err,
+			"apply transitions",
+		)
+	}
+	finalSuccesses := []*protobufs.TokenRequest{}
+	for _, success := range successes {
+		if success != nil {
+			finalSuccesses = append(finalSuccesses, success)
+		}
+	}
+
+	outputs.Outputs = []*protobufs.TokenOutput{}
+	for _, out := range outputsSet {
+		if out != nil {
+			for _, o := range out {
+				outputs.Outputs = append(outputs.Outputs, o)
 			}
-			outputs.Outputs = append(outputs.Outputs, success...)
-			finalizedTransitions.Requests = append(
-				finalizedTransitions.Requests,
-				transition,
-			)
 		}
 	}
 
 	a.TokenOutputs = outputs
+
+	finalizedTransitions.Requests = finalSuccesses
+	failedTransitions.Requests = finalFails
 
 	return a, finalizedTransitions, failedTransitions, nil
 }

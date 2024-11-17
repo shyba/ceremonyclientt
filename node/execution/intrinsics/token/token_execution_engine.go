@@ -537,6 +537,8 @@ func (e *TokenExecutionEngine) ProcessFrame(
 
 	proverTrieJoinRequests := [][]byte{}
 	proverTrieLeaveRequests := [][]byte{}
+	mapSnapshot := ToSerializedMap(e.peerSeniority)
+	activeMap := NewFromMap(mapSnapshot)
 
 	for i, output := range app.TokenOutputs.Outputs {
 		switch o := output.Output.(type) {
@@ -597,14 +599,14 @@ func (e *TokenExecutionEngine) ProcessFrame(
 						break
 					}
 				}
-				if _, ok := (*e.peerSeniority)[addr]; !ok {
-					(*e.peerSeniority)[addr] = PeerSeniorityItem{
+				if _, ok := (*activeMap)[addr]; !ok {
+					(*activeMap)[addr] = PeerSeniorityItem{
 						seniority: 10,
 						addr:      addr,
 					}
 				} else {
-					(*e.peerSeniority)[addr] = PeerSeniorityItem{
-						seniority: (*e.peerSeniority)[addr].seniority + 10,
+					(*activeMap)[addr] = PeerSeniorityItem{
+						seniority: (*activeMap)[addr].seniority + 10,
 						addr:      addr,
 					}
 				}
@@ -650,7 +652,7 @@ func (e *TokenExecutionEngine) ProcessFrame(
 					return nil, errors.Wrap(err, "process frame")
 				}
 
-				sen, ok := (*e.peerSeniority)[string(addr)]
+				sen, ok := (*activeMap)[string(addr)]
 				if !ok {
 					logger(
 						"peer announced with no seniority",
@@ -707,7 +709,7 @@ func (e *TokenExecutionEngine) ProcessFrame(
 
 				logger("combined aggregate and 1.4.19-21 seniority", zap.Uint64("seniority", total))
 
-				(*e.peerSeniority)[string(addr)] = PeerSeniorityItem{
+				(*activeMap)[string(addr)] = PeerSeniorityItem{
 					seniority: aggregated + additional,
 					addr:      string(addr),
 				}
@@ -721,7 +723,7 @@ func (e *TokenExecutionEngine) ProcessFrame(
 						return nil, errors.Wrap(err, "process frame")
 					}
 
-					(*e.peerSeniority)[string(addr)] = PeerSeniorityItem{
+					(*activeMap)[string(addr)] = PeerSeniorityItem{
 						seniority: 0,
 						addr:      string(addr),
 					}
@@ -735,7 +737,7 @@ func (e *TokenExecutionEngine) ProcessFrame(
 					return nil, errors.Wrap(err, "process frame")
 				}
 
-				sen, ok := (*e.peerSeniority)[string(addr)]
+				sen, ok := (*activeMap)[string(addr)]
 				if !ok {
 					logger(
 						"peer announced with no seniority",
@@ -778,7 +780,7 @@ func (e *TokenExecutionEngine) ProcessFrame(
 				}
 				total := GetAggregatedSeniority([]string{peerIds[0]}).Uint64() + additional
 				logger("combined aggregate and 1.4.19-21 seniority", zap.Uint64("seniority", total))
-				(*e.peerSeniority)[string(addr)] = PeerSeniorityItem{
+				(*activeMap)[string(addr)] = PeerSeniorityItem{
 					seniority: total,
 					addr:      string(addr),
 				}
@@ -790,14 +792,14 @@ func (e *TokenExecutionEngine) ProcessFrame(
 				return nil, errors.Wrap(err, "process frame")
 			}
 
-			if _, ok := (*e.peerSeniority)[string(addr)]; !ok {
-				(*e.peerSeniority)[string(addr)] = PeerSeniorityItem{
+			if _, ok := (*activeMap)[string(addr)]; !ok {
+				(*activeMap)[string(addr)] = PeerSeniorityItem{
 					seniority: 20,
 					addr:      string(addr),
 				}
 			} else {
-				(*e.peerSeniority)[string(addr)] = PeerSeniorityItem{
-					seniority: (*e.peerSeniority)[string(addr)].seniority + 20,
+				(*activeMap)[string(addr)] = PeerSeniorityItem{
+					seniority: (*activeMap)[string(addr)].seniority + 20,
 					addr:      string(addr),
 				}
 			}
@@ -823,14 +825,14 @@ func (e *TokenExecutionEngine) ProcessFrame(
 			}
 		case *protobufs.TokenOutput_Penalty:
 			addr := string(o.Penalty.Account.GetImplicitAccount().Address)
-			if _, ok := (*e.peerSeniority)[addr]; !ok {
-				(*e.peerSeniority)[addr] = PeerSeniorityItem{
+			if _, ok := (*activeMap)[addr]; !ok {
+				(*activeMap)[addr] = PeerSeniorityItem{
 					seniority: 0,
 					addr:      addr,
 				}
 				proverTrieLeaveRequests = append(proverTrieLeaveRequests, []byte(addr))
 			} else {
-				if (*e.peerSeniority)[addr].seniority > o.Penalty.Quantity {
+				if (*activeMap)[addr].seniority > o.Penalty.Quantity {
 					for _, t := range app.Tries {
 						if t.Contains([]byte(addr)) {
 							v := t.Get([]byte(addr))
@@ -841,12 +843,12 @@ func (e *TokenExecutionEngine) ProcessFrame(
 							break
 						}
 					}
-					(*e.peerSeniority)[addr] = PeerSeniorityItem{
-						seniority: (*e.peerSeniority)[addr].seniority - o.Penalty.Quantity,
+					(*activeMap)[addr] = PeerSeniorityItem{
+						seniority: (*activeMap)[addr].seniority - o.Penalty.Quantity,
 						addr:      addr,
 					}
 				} else {
-					(*e.peerSeniority)[addr] = PeerSeniorityItem{
+					(*activeMap)[addr] = PeerSeniorityItem{
 						seniority: 0,
 						addr:      addr,
 					}
@@ -859,23 +861,23 @@ func (e *TokenExecutionEngine) ProcessFrame(
 	joinAddrs := tries.NewMinHeap[PeerSeniorityItem]()
 	leaveAddrs := tries.NewMinHeap[PeerSeniorityItem]()
 	for _, addr := range proverTrieJoinRequests {
-		if _, ok := (*e.peerSeniority)[string(addr)]; !ok {
+		if _, ok := (*activeMap)[string(addr)]; !ok {
 			joinAddrs.Push(PeerSeniorityItem{
 				addr:      string(addr),
 				seniority: 0,
 			})
 		} else {
-			joinAddrs.Push((*e.peerSeniority)[string(addr)])
+			joinAddrs.Push((*activeMap)[string(addr)])
 		}
 	}
 	for _, addr := range proverTrieLeaveRequests {
-		if _, ok := (*e.peerSeniority)[string(addr)]; !ok {
+		if _, ok := (*activeMap)[string(addr)]; !ok {
 			leaveAddrs.Push(PeerSeniorityItem{
 				addr:      string(addr),
 				seniority: 0,
 			})
 		} else {
-			leaveAddrs.Push((*e.peerSeniority)[string(addr)])
+			leaveAddrs.Push((*activeMap)[string(addr)])
 		}
 	}
 
@@ -891,7 +893,7 @@ func (e *TokenExecutionEngine) ProcessFrame(
 	err = e.clockStore.PutPeerSeniorityMap(
 		txn,
 		e.intrinsicFilter,
-		ToSerializedMap(e.peerSeniority),
+		ToSerializedMap(activeMap),
 	)
 	if err != nil {
 		txn.Abort()
@@ -903,6 +905,8 @@ func (e *TokenExecutionEngine) ProcessFrame(
 		txn.Abort()
 		return nil, errors.Wrap(err, "process frame")
 	}
+
+	e.peerSeniority = activeMap
 
 	if frame.FrameNumber == application.PROOF_FRAME_RING_RESET ||
 		frame.FrameNumber == application.PROOF_FRAME_RING_RESET_2 {
