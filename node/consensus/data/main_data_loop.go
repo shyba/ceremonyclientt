@@ -71,9 +71,20 @@ func (e *DataClockConsensusEngine) runLoop() {
 				panic(err)
 			}
 
+			if runOnce {
+				if e.GetFrameProverTries()[0].Contains(e.provingKeyAddress) {
+					dataFrame, err := e.dataTimeReel.Head()
+					if err != nil {
+						panic(err)
+					}
+
+					latestFrame = e.processFrame(latestFrame, dataFrame)
+				}
+				runOnce = false
+			}
+
 			select {
 			case dataFrame := <-dataFrameCh:
-				runOnce = false
 				if e.GetFrameProverTries()[0].Contains(e.provingKeyAddress) {
 					if err = e.publishProof(dataFrame); err != nil {
 						e.logger.Error("could not publish", zap.Error(err))
@@ -86,12 +97,8 @@ func (e *DataClockConsensusEngine) runLoop() {
 				}
 				latestFrame = e.processFrame(latestFrame, dataFrame)
 			case <-time.After(20 * time.Second):
-				if e.GetFrameProverTries()[0].Contains(e.provingKeyAddress) && !runOnce {
+				if e.GetFrameProverTries()[0].Contains(e.provingKeyAddress) {
 					continue
-				}
-
-				if runOnce {
-					runOnce = false
 				}
 
 				dataFrame, err := e.dataTimeReel.Head()
