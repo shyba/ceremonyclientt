@@ -271,10 +271,30 @@ func (r *RPCServer) GetTokensByAccount(
 		return nil, err
 	}
 
+	timestamps := []int64{}
+	if req.IncludeMetadata {
+		tcache := map[uint64]int64{}
+		intrinsicFilter := p2p.GetBloomFilter(application.TOKEN_ADDRESS, 256, 3)
+		for _, frame := range frameNumbers {
+			if t, ok := tcache[frame]; ok {
+				timestamps = append(timestamps, t)
+				continue
+			}
+
+			f, _, err := r.clockStore.GetDataClockFrame(intrinsicFilter, frame, true)
+			if err != nil {
+				return nil, err
+			}
+
+			timestamps = append(timestamps, f.Timestamp)
+		}
+	}
+
 	return &protobufs.TokensByAccountResponse{
 		Coins:        coins,
 		FrameNumbers: frameNumbers,
 		Addresses:    addresses,
+		Timestamps:   timestamps,
 	}, nil
 }
 

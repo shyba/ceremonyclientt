@@ -636,12 +636,14 @@ message SendMessageResponse{}
 
 message GetTokensByAccountRequest {
   bytes address = 1;
+  bool include_metadata = 2;
 }
 
 message TokensByAccountResponse {
   repeated Coin coins = 1;
   repeated uint64 frame_numbers = 2;
   repeated bytes addresses = 3;
+  repeated int64 timestamps = 4;
 }
 
 message GetPreCoinProofsByAccountRequest {
