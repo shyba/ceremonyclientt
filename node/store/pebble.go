@@ -33,9 +33,15 @@ func (p *PebbleDB) Delete(key []byte) error {
 	return p.db.Delete(key, &pebble.WriteOptions{Sync: true})
 }
 
-func (p *PebbleDB) NewBatch() Transaction {
-	return &PebbleTransaction{
-		b: p.db.NewIndexedBatch(),
+func (p *PebbleDB) NewBatch(indexed bool) Transaction {
+	if indexed {
+		return &PebbleTransaction{
+			b: p.db.NewIndexedBatch(),
+		}
+	} else {
+		return &PebbleTransaction{
+			b: p.db.NewBatch(),
+		}
 	}
 }
 

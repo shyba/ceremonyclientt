@@ -363,7 +363,7 @@ func (d *InMemKVDB) Delete(key []byte) error {
 	return nil
 }
 
-func (d *InMemKVDB) NewBatch() Transaction {
+func (d *InMemKVDB) NewBatch(indexed bool) Transaction {
 	if !d.open {
 		return nil
 	}

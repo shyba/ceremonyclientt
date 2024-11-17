@@ -18,7 +18,7 @@ import (
 )
 
 type ClockStore interface {
-	NewTransaction() (Transaction, error)
+	NewTransaction(indexed bool) (Transaction, error)
 	GetLatestMasterClockFrame(filter []byte) (*protobufs.ClockFrame, error)
 	GetEarliestMasterClockFrame(filter []byte) (*protobufs.ClockFrame, error)
 	GetMasterClockFrame(
@@ -453,8 +453,8 @@ func clockDataSeniorityKey(
 	return key
 }
 
-func (p *PebbleClockStore) NewTransaction() (Transaction, error) {
-	return p.db.NewBatch(), nil
+func (p *PebbleClockStore) NewTransaction(indexed bool) (Transaction, error) {
+	return p.db.NewBatch(indexed), nil
 }
 
 // GetEarliestMasterClockFrame implements ClockStore.
@@ -746,7 +746,7 @@ func (p *PebbleClockStore) saveAggregateProofs(
 	shouldClose := false
 	if txn == nil {
 		var err error
-		txn, err = p.NewTransaction()
+		txn, err = p.NewTransaction(false)
 		if err != nil {
 			return err
 		}
@@ -1050,7 +1050,7 @@ func (p *PebbleClockStore) DeleteDataClockFrameRange(
 	fromFrameNumber uint64,
 	toFrameNumber uint64,
 ) error {
-	txn, err := p.NewTransaction()
+	txn, err := p.NewTransaction(false)
 	if err != nil {
 		return errors.Wrap(err, "delete data clock frame range")
 	}

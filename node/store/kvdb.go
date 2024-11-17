@@ -8,7 +8,7 @@ type KVDB interface {
 	Get(key []byte) ([]byte, io.Closer, error)
 	Set(key, value []byte) error
 	Delete(key []byte) error
-	NewBatch() Transaction
+	NewBatch(indexed bool) Transaction
 	NewIter(lowerBound []byte, upperBound []byte) (Iterator, error)
 	Compact(start, end []byte, parallelize bool) error
 	CompactAll() error

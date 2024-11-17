@@ -428,7 +428,7 @@ func (e *DataClockConsensusEngine) handleMint(
 			highestIncrement = previousIncrement
 		}
 
-		txn, err := e.coinStore.NewTransaction()
+		txn, err := e.coinStore.NewTransaction(false)
 		if err != nil {
 			return nil, errors.Wrap(err, "handle mint")
 		}

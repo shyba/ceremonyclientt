@@ -180,7 +180,7 @@ func (d *PeerstoreDatastore) Close() (err error) {
 
 func (d *PeerstoreDatastore) Batch(ctx context.Context) (ds.Batch, error) {
 	return &batch{
-		b:  &transaction{tx: d.db.NewBatch()},
+		b:  &transaction{tx: d.db.NewBatch(false)},
 		db: d.db,
 	}, nil
 }
@@ -189,7 +189,7 @@ func (d *PeerstoreDatastore) NewTransaction(
 	ctx context.Context,
 	readOnly bool,
 ) (ds.Txn, error) {
-	tx := d.db.NewBatch()
+	tx := d.db.NewBatch(false)
 	return &transaction{tx}, nil
 }
 

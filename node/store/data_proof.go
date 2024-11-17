@@ -122,7 +122,7 @@ func dataTimeProofLatestKey(peerId []byte) []byte {
 }
 
 func (p *PebbleDataProofStore) NewTransaction() (Transaction, error) {
-	return p.db.NewBatch(), nil
+	return p.db.NewBatch(false), nil
 }
 
 func internalGetAggregateProof(

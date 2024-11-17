@@ -661,7 +661,7 @@ func TestHandlePreMidnightMint(t *testing.T) {
 	assert.Len(t, success.Requests, 1)
 	assert.Len(t, fail.Requests, 1)
 
-	txn, _ := app.CoinStore.NewTransaction()
+	txn, _ := app.CoinStore.NewTransaction(false)
 	for i, o := range app.TokenOutputs.Outputs {
 		switch e := o.Output.(type) {
 		case *protobufs.TokenOutput_Coin:
@@ -670,7 +670,7 @@ func TestHandlePreMidnightMint(t *testing.T) {
 			err = app.CoinStore.PutCoin(txn, 1, a, e.Coin)
 			assert.NoError(t, err)
 		case *protobufs.TokenOutput_DeletedCoin:
-			c, err := app.CoinStore.GetCoinByAddress(txn, e.DeletedCoin.Address)
+			c, err := app.CoinStore.GetCoinByAddress(nil, e.DeletedCoin.Address)
 			assert.NoError(t, err)
 			err = app.CoinStore.DeleteCoin(txn, e.DeletedCoin.Address, c)
 			assert.NoError(t, err)

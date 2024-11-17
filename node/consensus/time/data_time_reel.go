@@ -290,7 +290,7 @@ func (d *DataTimeReel) createGenesisFrame() (
 		panic(err)
 	}
 
-	txn, err := d.clockStore.NewTransaction()
+	txn, err := d.clockStore.NewTransaction(false)
 	if err != nil {
 		panic(err)
 	}
@@ -311,7 +311,7 @@ func (d *DataTimeReel) createGenesisFrame() (
 		panic(err)
 	}
 
-	txn, err = d.clockStore.NewTransaction()
+	txn, err = d.clockStore.NewTransaction(false)
 	if err != nil {
 		panic(err)
 	}
@@ -531,7 +531,7 @@ func (d *DataTimeReel) storePending(
 			zap.String("distance", distance.Text(16)),
 		)
 
-		txn, err := d.clockStore.NewTransaction()
+		txn, err := d.clockStore.NewTransaction(false)
 		if err != nil {
 			panic(err)
 		}
@@ -638,7 +638,7 @@ func (d *DataTimeReel) setHead(frame *protobufs.ClockFrame, distance *big.Int) e
 		zap.Uint64("head_number", d.head.FrameNumber),
 		zap.String("head_output_tag", hex.EncodeToString(d.head.Output[:64])),
 	)
-	txn, err := d.clockStore.NewTransaction()
+	txn, err := d.clockStore.NewTransaction(false)
 	if err != nil {
 		panic(err)
 	}
@@ -933,7 +933,7 @@ func (d *DataTimeReel) forkChoice(
 		rightReplaySelectors =
 			rightReplaySelectors[1:]
 
-		txn, err := d.clockStore.NewTransaction()
+		txn, err := d.clockStore.NewTransaction(false)
 		if err != nil {
 			panic(err)
 		}
@@ -956,7 +956,7 @@ func (d *DataTimeReel) forkChoice(
 		frameNumber++
 	}
 
-	txn, err := d.clockStore.NewTransaction()
+	txn, err := d.clockStore.NewTransaction(false)
 	if err != nil {
 		panic(err)
 	}

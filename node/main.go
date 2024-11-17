@@ -598,14 +598,14 @@ func RunForkRepairIfNeeded(
 
 	if bytes.Equal(badFrameSelector, compareSel.FillBytes(make([]byte, 32))) {
 		logger.Info("performing fork repair")
-		txn, _ := coinStore.NewTransaction()
+		txn, _ := coinStore.NewTransaction(false)
 		_, outs, _ := application.GetOutputsFromClockFrame(frame)
 		logger.Info("removing invalid frame at position 48995")
 		for i, output := range outs.Outputs {
 			switch o := output.Output.(type) {
 			case *protobufs.TokenOutput_Coin:
 				address, _ := token.GetAddressOfCoin(o.Coin, frame.FrameNumber, uint64(i))
-				coin, err := coinStore.GetCoinByAddress(txn, address)
+				coin, err := coinStore.GetCoinByAddress(nil, address)
 				if err != nil {
 					fmt.Println(err)
 					return
@@ -656,7 +656,7 @@ func RunForkRepairIfNeeded(
 				return
 			}
 
-			txn, _ := clockStore.NewTransaction()
+			txn, _ := clockStore.NewTransaction(false)
 			if err := overrideHead(
 				txn,
 				clockStore,

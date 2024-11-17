@@ -185,7 +185,7 @@ func NewTokenExecutionEngine(
 				panic(err)
 			}
 
-			txn, err := clockStore.NewTransaction()
+			txn, err := clockStore.NewTransaction(false)
 			if err != nil {
 				panic(err)
 			}
@@ -249,7 +249,7 @@ func NewTokenExecutionEngine(
 			panic(err)
 		}
 
-		txn, err := clockStore.NewTransaction()
+		txn, err := clockStore.NewTransaction(false)
 		if err != nil {
 			panic(err)
 		}
@@ -559,7 +559,7 @@ func (e *TokenExecutionEngine) ProcessFrame(
 				return nil, errors.Wrap(err, "process frame")
 			}
 		case *protobufs.TokenOutput_DeletedCoin:
-			coin, err := e.coinStore.GetCoinByAddress(txn, o.DeletedCoin.Address)
+			coin, err := e.coinStore.GetCoinByAddress(nil, o.DeletedCoin.Address)
 			if err != nil {
 				txn.Abort()
 				return nil, errors.Wrap(err, "process frame")

@@ -848,7 +848,7 @@ func CreateGenesisState(
 				totalExecutions,
 			),
 		)
-		txn, err := coinStore.NewTransaction()
+		txn, err := coinStore.NewTransaction(false)
 		for _, output := range genesisState.Outputs {
 			if err != nil {
 				panic(err)
@@ -872,7 +872,7 @@ func CreateGenesisState(
 			panic(err)
 		}
 
-		txn, err = clockStore.NewTransaction()
+		txn, err = clockStore.NewTransaction(false)
 		if err != nil {
 			panic(err)
 		}
@@ -989,7 +989,7 @@ func CreateGenesisState(
 		})
 
 		logger.Info("serializing execution state to store")
-		txn, err := coinStore.NewTransaction()
+		txn, err := coinStore.NewTransaction(false)
 		for _, output := range genesisState.Outputs {
 			if err != nil {
 				panic(err)

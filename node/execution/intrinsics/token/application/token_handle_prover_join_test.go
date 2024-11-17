@@ -83,7 +83,7 @@ func TestHandleProverJoin(t *testing.T) {
 		[][]byte{bpub},
 	)
 	selbi, _ := gen.GetSelector()
-	txn, _ := app.ClockStore.NewTransaction()
+	txn, _ := app.ClockStore.NewTransaction(false)
 	app.ClockStore.StageDataClockFrame(selbi.FillBytes(make([]byte, 32)), gen, txn)
 	app.ClockStore.CommitDataClockFrame(gen.Filter, 0, selbi.FillBytes(make([]byte, 32)), app.Tries, txn, false)
 	txn.Commit()
@@ -115,7 +115,7 @@ func TestHandleProverJoin(t *testing.T) {
 	assert.Len(t, fail.Requests, 0)
 	app.Tries = append(app.Tries, &tries.RollingFrecencyCritbitTrie{})
 	app.Tries[1].Add(addr, 0)
-	txn, _ = app.ClockStore.NewTransaction()
+	txn, _ = app.ClockStore.NewTransaction(false)
 	frame1, _ := wprover.ProveDataClockFrame(gen, [][]byte{}, []*protobufs.InclusionAggregateProof{}, bprivKey, time.Now().UnixMilli(), 10000)
 	selbi, _ = frame1.GetSelector()
 	app.ClockStore.StageDataClockFrame(selbi.FillBytes(make([]byte, 32)), frame1, txn)
@@ -144,7 +144,7 @@ func TestHandleProverJoin(t *testing.T) {
 		false,
 	)
 	assert.Error(t, err)
-	txn, _ = app.ClockStore.NewTransaction()
+	txn, _ = app.ClockStore.NewTransaction(false)
 	frame2, _ := wprover.ProveDataClockFrame(frame1, [][]byte{}, []*protobufs.InclusionAggregateProof{}, bprivKey, time.Now().UnixMilli(), 10000)
 	selbi, _ = frame2.GetSelector()
 	app.ClockStore.StageDataClockFrame(selbi.FillBytes(make([]byte, 32)), frame2, txn)
@@ -205,7 +205,7 @@ func TestHandleProverJoin(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, success.Requests, 1)
 	assert.Len(t, app.TokenOutputs.Outputs, 1)
-	txn, _ = app.CoinStore.NewTransaction()
+	txn, _ = app.CoinStore.NewTransaction(false)
 	for i, o := range app.TokenOutputs.Outputs {
 		switch e := o.Output.(type) {
 		case *protobufs.TokenOutput_Coin:
@@ -233,7 +233,7 @@ func TestHandleProverJoin(t *testing.T) {
 		}
 	}
 	err = txn.Commit()
-	txn, _ = app.ClockStore.NewTransaction()
+	txn, _ = app.ClockStore.NewTransaction(false)
 	frame3, _ := wprover.ProveDataClockFrame(frame2, [][]byte{}, []*protobufs.InclusionAggregateProof{}, bprivKey, time.Now().UnixMilli(), 10000)
 	selbi, _ = frame3.GetSelector()
 	app.ClockStore.StageDataClockFrame(selbi.FillBytes(make([]byte, 32)), frame3, txn)

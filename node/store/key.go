@@ -217,7 +217,7 @@ func keyBundleEarliestKey(provingKey []byte) []byte {
 }
 
 func (p *PebbleKeyStore) NewTransaction() (Transaction, error) {
-	return p.db.NewBatch(), nil
+	return p.db.NewBatch(false), nil
 }
 
 // Stages a proving key for later inclusion on proof of meaningful work.
