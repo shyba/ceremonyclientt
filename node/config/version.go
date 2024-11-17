@@ -10,7 +10,7 @@ func GetMinimumVersionCutoff() time.Time {
 }
 
 func GetMinimumVersion() []byte {
-	return []byte{0x02, 0x00, 0x04}
+	return []byte{0x02, 0x00, 0x03}
 }
 
 func GetVersion() []byte {
