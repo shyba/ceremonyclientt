@@ -27,7 +27,7 @@ func (e *DataClockConsensusEngine) validateFrameMessage(peerID peer.ID, message 
 		if err := proto.Unmarshal(a.Value, frame); err != nil {
 			return p2p.ValidationResultReject
 		}
-		if ts := time.UnixMilli(frame.Timestamp); time.Since(ts) > time.Hour {
+		if ts := time.UnixMilli(frame.Timestamp); time.Since(ts) > 2*time.Minute {
 			return p2p.ValidationResultIgnore
 		}
 		return p2p.ValidationResultAccept
