@@ -94,6 +94,7 @@ type Transaction interface {
 	Delete(key []byte) error
 	Abort() error
 	NewIter(lowerBound []byte, upperBound []byte) (Iterator, error)
+	DeleteRange(lowerBound []byte, upperBound []byte) error
 }
 
 type PebbleTransaction struct {
@@ -128,6 +129,17 @@ func (t *PebbleTransaction) NewIter(lowerBound []byte, upperBound []byte) (
 		LowerBound: lowerBound,
 		UpperBound: upperBound,
 	})
+}
+
+func (t *PebbleTransaction) DeleteRange(
+	lowerBound []byte,
+	upperBound []byte,
+) error {
+	return t.b.DeleteRange(
+		lowerBound,
+		upperBound,
+		&pebble.WriteOptions{Sync: true},
+	)
 }
 
 var _ Transaction = (*PebbleTransaction)(nil)

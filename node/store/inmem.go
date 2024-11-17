@@ -243,6 +243,7 @@ func (t *InMemKVDBTransaction) Delete(key []byte) error {
 	if !t.db.open {
 		return errors.New("inmem db closed")
 	}
+
 	t.changes = append(t.changes, InMemKVDBOperation{
 		op:  DeleteOperation,
 		key: key,
@@ -266,6 +267,32 @@ func (t *InMemKVDBTransaction) NewIter(lowerBound []byte, upperBound []byte) (
 		end:   upperBound,
 		pos:   -1,
 	}, nil
+}
+
+func (t *InMemKVDBTransaction) DeleteRange(
+	lowerBound []byte,
+	upperBound []byte,
+) error {
+	if !t.db.open {
+		return errors.New("inmem db closed")
+	}
+
+	iter, err := t.NewIter(lowerBound, upperBound)
+	if err != nil {
+		return err
+	}
+
+	for iter.First(); iter.Valid(); iter.Next() {
+		t.changes = append(t.changes, InMemKVDBOperation{
+			op:  DeleteOperation,
+			key: iter.Key(),
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (t *InMemKVDBTransaction) Abort() error {

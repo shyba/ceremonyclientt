@@ -490,6 +490,8 @@ func (e *DataClockConsensusEngine) Start() <-chan error {
 
 	go e.runLoop()
 	go e.runSync()
+	go e.runFramePruning()
+
 	go func() {
 		time.Sleep(30 * time.Second)
 		e.logger.Info("checking for snapshots to play forward")

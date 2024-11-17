@@ -41,7 +41,51 @@ func (
 	return frameProverTries
 }
 
+func (e *DataClockConsensusEngine) runFramePruning() {
+	// A full prover should _never_ do this
+	if e.GetFrameProverTries()[0].Contains(e.provingKeyAddress) ||
+		e.config.Engine.MaxFrames == -1 || e.config.Engine.FullProver {
+		e.logger.Info("frame pruning not enabled")
+		return
+	}
+
+	if e.config.Engine.MaxFrames < 1000 {
+		e.logger.Warn(
+			"max frames for pruning too low, pruning disabled",
+			zap.Int64("max_frames", e.config.Engine.MaxFrames),
+		)
+		return
+	}
+
+	for {
+		select {
+		case <-e.ctx.Done():
+			return
+		case <-time.After(1 * time.Hour):
+			head, err := e.dataTimeReel.Head()
+			if err != nil {
+				panic(err)
+			}
+
+			if head.FrameNumber < uint64(e.config.Engine.MaxFrames)+1 {
+				continue
+			}
+
+			if err := e.pruneFrames(
+				head.FrameNumber - uint64(e.config.Engine.MaxFrames),
+			); err != nil {
+				e.logger.Error("could not prune", zap.Error(err))
+			}
+		}
+	}
+}
+
 func (e *DataClockConsensusEngine) runSync() {
+	// small optimization, beacon should never collect for now:
+	if e.GetFrameProverTries()[0].Contains(e.provingKeyAddress) {
+		return
+	}
+
 	for {
 		select {
 		case <-e.ctx.Done():

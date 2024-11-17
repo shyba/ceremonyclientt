@@ -98,6 +98,11 @@ type ClockStore interface {
 		frame *protobufs.ClockFrame,
 		tries []*tries.RollingFrecencyCritbitTrie,
 	) error
+	DeleteDataClockFrameRange(
+		filter []byte,
+		minFrameNumber uint64,
+		maxFrameNumber uint64,
+	) error
 }
 
 type PebbleClockStore struct {
@@ -714,6 +719,26 @@ func (p *PebbleClockStore) fillAggregateProofs(
 	return nil
 }
 
+func (p *PebbleClockStore) deleteAggregateProofs(
+	txn Transaction,
+	frame *protobufs.ClockFrame,
+) error {
+	for i := 0; i < len(frame.Input[516:])/74; i++ {
+		commit := frame.Input[516+(i*74) : 516+((i+1)*74)]
+		err := internalDeleteAggregateProof(
+			p.db,
+			txn,
+			frame.AggregateProofs[i],
+			commit,
+		)
+		if err != nil {
+			return errors.Wrap(err, "delete aggregate proofs")
+		}
+	}
+
+	return nil
+}
+
 func (p *PebbleClockStore) saveAggregateProofs(
 	txn Transaction,
 	frame *protobufs.ClockFrame,
@@ -1025,16 +1050,46 @@ func (p *PebbleClockStore) DeleteDataClockFrameRange(
 	fromFrameNumber uint64,
 	toFrameNumber uint64,
 ) error {
-	err := p.db.DeleteRange(
-		clockDataFrameKey(
-			filter,
-			fromFrameNumber,
-		),
-		clockDataFrameKey(
-			filter,
-			toFrameNumber,
-		),
-	)
+	txn, err := p.NewTransaction()
+	if err != nil {
+		return errors.Wrap(err, "delete data clock frame range")
+	}
+
+	for i := fromFrameNumber; i < toFrameNumber; i++ {
+		frames, err := p.GetStagedDataClockFramesForFrameNumber(filter, i)
+		if err != nil {
+			return errors.Wrap(err, "delete data clock frame range")
+		}
+
+		for _, frame := range frames {
+			err = p.deleteAggregateProofs(txn, frame)
+			if err != nil {
+				txn.Abort()
+				return errors.Wrap(err, "delete data clock frame range")
+			}
+		}
+
+		err = txn.DeleteRange(
+			clockDataParentIndexKey(filter, i, bytes.Repeat([]byte{0x00}, 32)),
+			clockDataParentIndexKey(filter, i, bytes.Repeat([]byte{0xff}, 32)),
+		)
+		if err != nil {
+			txn.Abort()
+			return errors.Wrap(err, "delete data clock frame range")
+		}
+
+		err = txn.Delete(clockDataFrameKey(filter, i))
+		if err != nil {
+			txn.Abort()
+			return errors.Wrap(err, "delete data clock frame range")
+		}
+	}
+
+	if err = txn.Commit(); err != nil {
+		txn.Abort()
+		return errors.Wrap(err, "delete data clock frame range")
+	}
+
 	return errors.Wrap(err, "delete data clock frame range")
 }
 
