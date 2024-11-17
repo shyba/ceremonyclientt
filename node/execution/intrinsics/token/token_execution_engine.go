@@ -222,9 +222,9 @@ func NewTokenExecutionEngine(
 		peerSeniority:         NewFromMap(peerSeniority),
 	}
 
-	syncSend := false
+	alwaysSend := false
 	if bytes.Equal(config.GetGenesis().Beacon, pubSub.GetPublicKey()) {
-		syncSend = true
+		alwaysSend = true
 	}
 
 	restore := func() []*tries.RollingFrecencyCritbitTrie {
@@ -297,7 +297,7 @@ func NewTokenExecutionEngine(
 		origin,
 		inclusionProof,
 		proverKeys,
-		syncSend,
+		alwaysSend,
 		restore,
 	)
 

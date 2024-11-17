@@ -234,7 +234,7 @@ func NewDataClockConsensusEngine(
 		keyStore:         keyStore,
 		keyManager:       keyManager,
 		pubSub:           pubSub,
-		frameChan:        make(chan *protobufs.ClockFrame, 8),
+		frameChan:        make(chan *protobufs.ClockFrame),
 		executionEngines: map[string]execution.ExecutionEngine{},
 		dependencyMap:    make(map[string]*anypb.Any),
 		parentSelector: []byte{
@@ -256,9 +256,9 @@ func NewDataClockConsensusEngine(
 		masterTimeReel:            masterTimeReel,
 		dataTimeReel:              dataTimeReel,
 		peerInfoManager:           peerInfoManager,
-		frameMessageProcessorCh:   make(chan *pb.Message, 8),
-		txMessageProcessorCh:      make(chan *pb.Message, 8),
-		infoMessageProcessorCh:    make(chan *pb.Message, 8),
+		frameMessageProcessorCh:   make(chan *pb.Message),
+		txMessageProcessorCh:      make(chan *pb.Message),
+		infoMessageProcessorCh:    make(chan *pb.Message),
 		config:                    cfg,
 		preMidnightMint:           map[string]struct{}{},
 		grpcRateLimiter: NewRateLimiter(
