@@ -1,5 +1,7 @@
 package config
 
+import "time"
+
 type EngineConfig struct {
 	ProvingKeyId         string `yaml:"provingKeyId"`
 	Filter               string `yaml:"filter"`
@@ -24,6 +26,8 @@ type EngineConfig struct {
 	// Automatically merges coins after minting once a sufficient number has been
 	// accrued
 	AutoMergeCoins bool `yaml:"autoMergeCoins"`
+	// Maximum wait time for a frame to be downloaded from a peer.
+	SyncTimeout time.Duration `yaml:"syncTimeout"`
 
 	// Values used only for testing – do not override these in production, your
 	// node will get kicked out
