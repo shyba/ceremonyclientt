@@ -890,6 +890,10 @@ func (e *TokenExecutionEngine) ProcessFrame(
 
 	ProcessJoinsAndLeaves(joinReqs, leaveReqs, app, e.peerSeniority, frame)
 
+	if frame.FrameNumber == application.PROOF_FRAME_SENIORITY_REPAIR {
+		e.performSeniorityMapRepair(activeMap, frame)
+	}
+
 	err = e.clockStore.PutPeerSeniorityMap(
 		txn,
 		e.intrinsicFilter,
@@ -934,6 +938,95 @@ func (e *TokenExecutionEngine) ProcessFrame(
 	}
 
 	return app.Tries, nil
+}
+
+func (e *TokenExecutionEngine) performSeniorityMapRepair(
+	activeMap *PeerSeniority,
+	frame *protobufs.ClockFrame,
+) {
+	if e.pubSub.GetNetwork() != 0 {
+		return
+	}
+
+	e.logger.Info(
+		"repairing seniority map from historic data, this may take a while",
+	)
+
+	RebuildPeerSeniority(0)
+	for f := uint64(53028); f < frame.FrameNumber; f++ {
+		frame, _, err := e.clockStore.GetDataClockFrame(e.intrinsicFilter, f, false)
+		if err != nil {
+			break
+		}
+
+		reqs, _, _ := application.GetOutputsFromClockFrame(frame)
+
+		for _, req := range reqs.Requests {
+			switch t := req.Request.(type) {
+			case *protobufs.TokenRequest_Join:
+				if t.Join.Announce != nil && len(
+					t.Join.Announce.PublicKeySignaturesEd448,
+				) > 0 {
+					addr, err := e.getAddressFromSignature(
+						t.Join.Announce.PublicKeySignaturesEd448[0],
+					)
+					if err != nil {
+						continue
+					}
+
+					peerId, err := e.getPeerIdFromSignature(
+						t.Join.Announce.PublicKeySignaturesEd448[0],
+					)
+					if err != nil {
+						continue
+					}
+
+					additional := uint64(0)
+
+					_, prfs, err := e.coinStore.GetPreCoinProofsForOwner(addr)
+					for _, pr := range prfs {
+						if pr.IndexProof == nil && pr.Difficulty == 0 && pr.Commitment == nil {
+							// approximate average per interval:
+							add := new(big.Int).SetBytes(pr.Amount)
+							add.Quo(add, big.NewInt(58800000))
+							if add.Cmp(big.NewInt(4000000)) > 0 {
+								add = big.NewInt(4000000)
+							}
+							additional = add.Uint64()
+						}
+					}
+
+					if err != nil && !errors.Is(err, store.ErrNotFound) {
+						continue
+					}
+					peerIds := []string{peerId.String()}
+					if len(t.Join.Announce.PublicKeySignaturesEd448) > 1 {
+						for _, announce := range t.Join.Announce.PublicKeySignaturesEd448[1:] {
+							peerId, err := e.getPeerIdFromSignature(
+								announce,
+							)
+							if err != nil {
+								continue
+							}
+
+							peerIds = append(peerIds, peerId.String())
+						}
+					}
+
+					aggregated := GetAggregatedSeniority(peerIds).Uint64()
+					total := aggregated + additional
+					sen, ok := (*activeMap)[string(addr)]
+
+					if !ok || sen.seniority < total {
+						(*activeMap)[string(addr)] = PeerSeniorityItem{
+							seniority: total,
+							addr:      string(addr),
+						}
+					}
+				}
+			}
+		}
+	}
 }
 
 func ProcessJoinsAndLeaves(
@@ -1052,9 +1145,7 @@ func (e *TokenExecutionEngine) VerifyExecution(
 					}
 
 					parent, tries, err := e.clockStore.GetDataClockFrame(
-						append(
-							p2p.GetBloomFilter(application.TOKEN_ADDRESS, 256, 3),
-						),
+						p2p.GetBloomFilter(application.TOKEN_ADDRESS, 256, 3),
 						frame.FrameNumber-1,
 						false,
 					)
