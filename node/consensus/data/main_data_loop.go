@@ -8,6 +8,7 @@ import (
 	"github.com/iden3/go-iden3-crypto/poseidon"
 	"go.uber.org/zap"
 	"source.quilibrium.com/quilibrium/monorepo/node/consensus"
+	"source.quilibrium.com/quilibrium/monorepo/node/execution/intrinsics/token/application"
 	"source.quilibrium.com/quilibrium/monorepo/node/internal/cas"
 	"source.quilibrium.com/quilibrium/monorepo/node/internal/frametime"
 	"source.quilibrium.com/quilibrium/monorepo/node/protobufs"
@@ -67,7 +68,8 @@ func (e *DataClockConsensusEngine) runFramePruning() {
 				panic(err)
 			}
 
-			if head.FrameNumber < uint64(e.config.Engine.MaxFrames)+1 {
+			if head.FrameNumber < uint64(e.config.Engine.MaxFrames)+1 ||
+				head.FrameNumber <= application.PROOF_FRAME_SENIORITY_REPAIR {
 				continue
 			}
 
