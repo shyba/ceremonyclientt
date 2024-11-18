@@ -94,14 +94,20 @@ func (e *DataClockConsensusEngine) runSync() {
 			if _, err := e.collect(enqueuedFrame); err != nil {
 				e.logger.Error("could not collect", zap.Error(err))
 			}
-		case <-time.After(20 * time.Second):
+		case <-time.After(300 * time.Millisecond):
 			if e.GetFrameProverTries()[0].Contains(e.provingKeyAddress) {
 				continue
 			}
+
 			head, err := e.dataTimeReel.Head()
 			if err != nil {
 				panic(err)
 			}
+
+			if head.Timestamp > time.Now().UnixMilli()-15000 {
+				continue
+			}
+
 			if _, err := e.collect(head); err != nil {
 				e.logger.Error("could not collect", zap.Error(err))
 			}
