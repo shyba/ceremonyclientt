@@ -2,7 +2,9 @@ package cmd
 
 import (
 	"bytes"
+	"fmt"
 	"strings"
+	"time"
 
 	"github.com/iden3/go-iden3-crypto/poseidon"
 	"github.com/libp2p/go-libp2p/core/crypto"
@@ -29,7 +31,7 @@ var proverPauseCmd = &cobra.Command{
 		pubsub := p2p.NewBlossomSub(NodeConfig.P2P, logger)
 		intrinsicFilter := p2p.GetBloomFilter(application.TOKEN_ADDRESS, 256, 3)
 		pubsub.Subscribe(
-			intrinsicFilter,
+			append([]byte{0x00}, intrinsicFilter...),
 			func(message *pb.Message) error { return nil },
 		)
 		key, err := GetPrivKeyFromConfig(NodeConfig)
@@ -52,10 +54,28 @@ var proverPauseCmd = &cobra.Command{
 			panic(err)
 		}
 
+	loop:
+		for {
+			peers := pubsub.GetBitmaskPeers()
+			if len(peers) == 0 {
+				fmt.Println("Waiting for peer list to form before broadcasting pause...")
+				time.Sleep(5 * time.Second)
+				continue loop
+			}
+			for _, set := range peers {
+				if len(set) < 3 {
+					fmt.Println("Waiting for more peers before broadcasting pause...")
+					time.Sleep(5 * time.Second)
+					continue loop
+				}
+				break loop
+			}
+		}
+
 		err = publishMessage(
 			key,
 			pubsub,
-			intrinsicFilter,
+			append([]byte{0x00}, intrinsicFilter...),
 			&protobufs.AnnounceProverPause{
 				Filter: filter,
 				PublicKeySignatureEd448: &protobufs.Ed448Signature{
