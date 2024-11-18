@@ -26,7 +26,7 @@ var NodeConfig *config.Config
 var simulateFail bool
 var LightNode bool = false
 var DryRun bool = false
-var publicRPC bool = true
+var publicRPC bool = false
 
 var rootCmd = &cobra.Command{
 	Use:   "qclient",
@@ -188,7 +188,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(
 		&publicRPC,
 		"public-rpc",
-		true,
+		false,
 		"uses the public RPC",
 	)
 }
