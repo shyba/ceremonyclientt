@@ -1275,5 +1275,6 @@ func printNodeInfo(cfg *config.Config) {
 	fmt.Println("Seniority: " + new(big.Int).SetBytes(
 		nodeInfo.PeerSeniority,
 	).String())
+	fmt.Println("Active Workers:", nodeInfo.Workers)
 	printBalance(cfg)
 }

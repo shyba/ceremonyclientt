@@ -184,6 +184,7 @@ func (r *RPCServer) GetNodeInfo(
 		),
 		PeerSeniority: seniority.FillBytes(make([]byte, 32)),
 		ProverRing:    int32(ring),
+		Workers:       r.executionEngines[0].GetWorkerCount(),
 	}, nil
 }
 

@@ -988,3 +988,14 @@ func (e *DataClockConsensusEngine) createParallelDataClientsFromBaseMultiaddr(
 	)
 	return clients, nil
 }
+
+func (e *DataClockConsensusEngine) GetWorkerCount() uint32 {
+	count := uint32(0)
+	for _, client := range e.clients {
+		if client != nil {
+			count++
+		}
+	}
+
+	return count
+}

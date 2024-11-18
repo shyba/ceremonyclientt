@@ -63,6 +63,7 @@ message NodeInfoResponse {
   bytes version = 4;
   bytes peer_seniority = 5;
   int32 prover_ring = 6;
+  uint32 workers = 7;
 }
 
 message PutPeerInfoRequest {

@@ -1540,3 +1540,7 @@ func (e *TokenExecutionEngine) getAddressFromSignature(
 
 	return altAddr.FillBytes(make([]byte, 32)), nil
 }
+
+func (e *TokenExecutionEngine) GetWorkerCount() uint32 {
+	return e.clock.GetWorkerCount()
+}
