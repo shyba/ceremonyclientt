@@ -44,7 +44,7 @@ func (pubsub) Publish(address []byte, data []byte) error                        
 func (pubsub) PublishToBitmask(bitmask []byte, data []byte) error                      { return nil }
 func (pubsub) Subscribe(bitmask []byte, handler func(message *pb.Message) error) error { return nil }
 func (pubsub) Unsubscribe(bitmask []byte, raw bool)                                    {}
-func (pubsub) RegisterValidator(bitmask []byte, validator func(peerID peer.ID, message *pb.Message) p2p.ValidationResult) error {
+func (pubsub) RegisterValidator(bitmask []byte, validator func(peerID peer.ID, message *pb.Message) p2p.ValidationResult, sync bool) error {
 	return nil
 }
 func (pubsub) UnregisterValidator(bitmask []byte) error     { return nil }
@@ -661,7 +661,7 @@ func TestHandlePreMidnightMint(t *testing.T) {
 	assert.Len(t, success.Requests, 1)
 	assert.Len(t, fail.Requests, 1)
 
-	txn, _ := app.CoinStore.NewTransaction()
+	txn, _ := app.CoinStore.NewTransaction(false)
 	for i, o := range app.TokenOutputs.Outputs {
 		switch e := o.Output.(type) {
 		case *protobufs.TokenOutput_Coin:
@@ -670,7 +670,7 @@ func TestHandlePreMidnightMint(t *testing.T) {
 			err = app.CoinStore.PutCoin(txn, 1, a, e.Coin)
 			assert.NoError(t, err)
 		case *protobufs.TokenOutput_DeletedCoin:
-			c, err := app.CoinStore.GetCoinByAddress(txn, e.DeletedCoin.Address)
+			c, err := app.CoinStore.GetCoinByAddress(nil, e.DeletedCoin.Address)
 			assert.NoError(t, err)
 			err = app.CoinStore.DeleteCoin(txn, e.DeletedCoin.Address, c)
 			assert.NoError(t, err)

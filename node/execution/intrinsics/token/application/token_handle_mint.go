@@ -21,10 +21,10 @@ import (
 const PROOF_FRAME_CUTOFF = 46500
 const PROOF_FRAME_RING_RESET = 52000
 const PROOF_FRAME_RING_RESET_2 = 53028
+const PROOF_FRAME_SENIORITY_REPAIR = 59029
 
 func (a *TokenApplication) handleMint(
 	currentFrameNumber uint64,
-	lockMap map[string]struct{},
 	t *protobufs.MintCoinRequest,
 	frame *protobufs.ClockFrame,
 	parallelismMap map[int]uint64,
@@ -72,10 +72,6 @@ func (a *TokenApplication) handleMint(
 			return nil, errors.Wrap(ErrInvalidStateTransition, "handle mint")
 		}
 
-		if _, touched := lockMap[string(t.Proofs[0][32:])]; touched {
-			return nil, errors.Wrap(ErrInvalidStateTransition, "handle mint")
-		}
-
 		_, pr, err := a.CoinStore.GetPreCoinProofsForOwner(t.Proofs[0][32:])
 		if err != nil && !errors.Is(err, store.ErrNotFound) {
 			return nil, errors.Wrap(ErrInvalidStateTransition, "handle mint")
@@ -86,8 +82,6 @@ func (a *TokenApplication) handleMint(
 				return nil, errors.Wrap(ErrInvalidStateTransition, "handle mint")
 			}
 		}
-
-		lockMap[string(t.Proofs[0][32:])] = struct{}{}
 
 		outputs := []*protobufs.TokenOutput{
 			&protobufs.TokenOutput{
@@ -130,27 +124,11 @@ func (a *TokenApplication) handleMint(
 			zap.String("peer_id", base58.Encode([]byte(peerId))),
 			zap.Uint64("frame_number", currentFrameNumber),
 		)
-		if _, touched := lockMap[string(t.Signature.PublicKey.KeyValue)]; touched {
-			a.Logger.Debug(
-				"already received",
-				zap.String("peer_id", base58.Encode([]byte(peerId))),
-				zap.Uint64("frame_number", currentFrameNumber),
-			)
-			return nil, errors.Wrap(ErrInvalidStateTransition, "handle mint")
-		}
 		ring := -1
 		for i, t := range a.Tries[1:] {
 			if t.Contains(altAddr.FillBytes(make([]byte, 32))) {
 				ring = i
 			}
-		}
-		if ring == -1 {
-			a.Logger.Debug(
-				"not in ring",
-				zap.String("peer_id", base58.Encode([]byte(peerId))),
-				zap.Uint64("frame_number", currentFrameNumber),
-			)
-			return nil, errors.Wrap(ErrInvalidStateTransition, "handle mint")
 		}
 
 		_, prfs, err := a.CoinStore.GetPreCoinProofsForOwner(
@@ -181,7 +159,6 @@ func (a *TokenApplication) handleMint(
 						zap.String("peer_id", base58.Encode([]byte(peerId))),
 						zap.Uint64("frame_number", currentFrameNumber),
 					)
-					lockMap[string(t.Signature.PublicKey.KeyValue)] = struct{}{}
 					return []*protobufs.TokenOutput{&protobufs.TokenOutput{
 						Output: &protobufs.TokenOutput_Penalty{
 							Penalty: &protobufs.ProverPenalty{
@@ -210,7 +187,6 @@ func (a *TokenApplication) handleMint(
 				zap.String("peer_id", base58.Encode([]byte(peerId))),
 				zap.Uint64("frame_number", currentFrameNumber),
 			)
-			lockMap[string(t.Signature.PublicKey.KeyValue)] = struct{}{}
 			return []*protobufs.TokenOutput{&protobufs.TokenOutput{
 				Output: &protobufs.TokenOutput_Penalty{
 					Penalty: &protobufs.ProverPenalty{
@@ -271,7 +247,6 @@ func (a *TokenApplication) handleMint(
 					zap.String("peer_id", base58.Encode([]byte(peerId))),
 					zap.Uint64("frame_number", currentFrameNumber),
 				)
-				lockMap[string(t.Signature.PublicKey.KeyValue)] = struct{}{}
 				return []*protobufs.TokenOutput{&protobufs.TokenOutput{
 					Output: &protobufs.TokenOutput_Penalty{
 						Penalty: &protobufs.ProverPenalty{
@@ -310,7 +285,6 @@ func (a *TokenApplication) handleMint(
 					zap.Uint64("frame_number", currentFrameNumber),
 					zap.Int("proof_size", len(leaf)),
 				)
-				lockMap[string(t.Signature.PublicKey.KeyValue)] = struct{}{}
 				return []*protobufs.TokenOutput{&protobufs.TokenOutput{
 					Output: &protobufs.TokenOutput_Penalty{
 						Penalty: &protobufs.ProverPenalty{
@@ -359,7 +333,11 @@ func (a *TokenApplication) handleMint(
 		}
 		if verified && delete != nil && len(t.Proofs) > 3 && wesoVerified {
 			storage := PomwBasis(1, ring, currentFrameNumber)
-			storage.Quo(storage, big.NewInt(int64(parallelismMap[ring])))
+			m := parallelismMap[ring]
+			if m == 0 {
+				m = 1
+			}
+			storage.Quo(storage, big.NewInt(int64(m)))
 			storage.Mul(storage, big.NewInt(int64(parallelism)))
 
 			a.Logger.Debug(
@@ -452,7 +430,6 @@ func (a *TokenApplication) handleMint(
 				})
 			}
 		}
-		lockMap[string(t.Signature.PublicKey.KeyValue)] = struct{}{}
 		return outputs, nil
 	}
 	a.Logger.Debug(

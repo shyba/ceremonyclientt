@@ -8,6 +8,7 @@ import (
 	"github.com/iden3/go-iden3-crypto/poseidon"
 	"go.uber.org/zap"
 	"source.quilibrium.com/quilibrium/monorepo/node/consensus"
+	"source.quilibrium.com/quilibrium/monorepo/node/execution/intrinsics/token/application"
 	"source.quilibrium.com/quilibrium/monorepo/node/internal/cas"
 	"source.quilibrium.com/quilibrium/monorepo/node/internal/frametime"
 	"source.quilibrium.com/quilibrium/monorepo/node/protobufs"
@@ -41,6 +42,75 @@ func (
 	return frameProverTries
 }
 
+func (e *DataClockConsensusEngine) runFramePruning() {
+	// A full prover should _never_ do this
+	if e.GetFrameProverTries()[0].Contains(e.provingKeyAddress) ||
+		e.config.Engine.MaxFrames == -1 || e.config.Engine.FullProver {
+		e.logger.Info("frame pruning not enabled")
+		return
+	}
+
+	if e.config.Engine.MaxFrames < 1000 {
+		e.logger.Warn(
+			"max frames for pruning too low, pruning disabled",
+			zap.Int64("max_frames", e.config.Engine.MaxFrames),
+		)
+		return
+	}
+
+	for {
+		select {
+		case <-e.ctx.Done():
+			return
+		case <-time.After(1 * time.Hour):
+			head, err := e.dataTimeReel.Head()
+			if err != nil {
+				panic(err)
+			}
+
+			if head.FrameNumber < uint64(e.config.Engine.MaxFrames)+1 ||
+				head.FrameNumber <= application.PROOF_FRAME_SENIORITY_REPAIR+1 {
+				continue
+			}
+
+			if err := e.pruneFrames(
+				head.FrameNumber - uint64(e.config.Engine.MaxFrames),
+			); err != nil {
+				e.logger.Error("could not prune", zap.Error(err))
+			}
+		}
+	}
+}
+
+func (e *DataClockConsensusEngine) runSync() {
+	// small optimization, beacon should never collect for now:
+	if e.GetFrameProverTries()[0].Contains(e.provingKeyAddress) {
+		return
+	}
+
+	for {
+		select {
+		case <-e.ctx.Done():
+			return
+		case enqueuedFrame := <-e.requestSyncCh:
+			if _, err := e.collect(enqueuedFrame); err != nil {
+				e.logger.Error("could not collect", zap.Error(err))
+			}
+		case <-time.After(20 * time.Second):
+			if e.GetFrameProverTries()[0].Contains(e.provingKeyAddress) {
+				continue
+			}
+			head, err := e.dataTimeReel.Head()
+			if err != nil {
+				panic(err)
+			}
+			if _, err := e.collect(head); err != nil {
+				e.logger.Error("could not collect", zap.Error(err))
+			}
+		}
+	}
+}
+
 func (e *DataClockConsensusEngine) runLoop() {
 	dataFrameCh := e.dataTimeReel.NewFrameCh()
 	runOnce := true
@@ -58,9 +128,22 @@ func (e *DataClockConsensusEngine) runLoop() {
 				panic(err)
 			}
 
-			select {
-			case dataFrame := <-dataFrameCh:
+			if runOnce {
+				if e.GetFrameProverTries()[0].Contains(e.provingKeyAddress) {
+					dataFrame, err := e.dataTimeReel.Head()
+					if err != nil {
+						panic(err)
+					}
+
+					latestFrame = e.processFrame(latestFrame, dataFrame)
+				}
 				runOnce = false
+			}
+
+			select {
+			case <-e.ctx.Done():
+				return
+			case dataFrame := <-dataFrameCh:
 				if e.GetFrameProverTries()[0].Contains(e.provingKeyAddress) {
 					if err = e.publishProof(dataFrame); err != nil {
 						e.logger.Error("could not publish", zap.Error(err))
@@ -71,21 +154,6 @@ func (e *DataClockConsensusEngine) runLoop() {
 						e.stateMx.Unlock()
 					}
 				}
-				latestFrame = e.processFrame(latestFrame, dataFrame)
-			case <-time.After(20 * time.Second):
-				if e.GetFrameProverTries()[0].Contains(e.provingKeyAddress) && !runOnce {
-					continue
-				}
-
-				if runOnce {
-					runOnce = false
-				}
-
-				dataFrame, err := e.dataTimeReel.Head()
-				if err != nil {
-					panic(err)
-				}
-
 				latestFrame = e.processFrame(latestFrame, dataFrame)
 			}
 		}
@@ -103,8 +171,9 @@ func (e *DataClockConsensusEngine) processFrame(
 	)
 	var err error
 	if !e.GetFrameProverTries()[0].Contains(e.provingKeyBytes) {
-		if latestFrame, err = e.collect(dataFrame); err != nil {
-			e.logger.Error("could not collect", zap.Error(err))
+		select {
+		case e.requestSyncCh <- dataFrame:
+		default:
 		}
 	}
 
@@ -267,6 +336,7 @@ func (e *DataClockConsensusEngine) processFrame(
 							},
 						},
 					},
+					Timestamp: time.Now().UnixMilli(),
 				})
 
 				if e.config.Engine.AutoMergeCoins {
@@ -307,6 +377,7 @@ func (e *DataClockConsensusEngine) processFrame(
 									},
 								},
 							},
+							Timestamp: time.Now().UnixMilli(),
 						})
 					}
 				}

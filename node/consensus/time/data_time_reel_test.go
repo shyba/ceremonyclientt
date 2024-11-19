@@ -187,6 +187,7 @@ func TestDataTimeReel(t *testing.T) {
 		},
 		pubKeys,
 		true,
+		func() []*tries.RollingFrecencyCritbitTrie { return []*tries.RollingFrecencyCritbitTrie{} },
 	)
 
 	err = d.Start()

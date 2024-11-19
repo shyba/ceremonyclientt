@@ -20,4 +20,5 @@ type ExecutionEngine interface {
 	GetSeniority() *big.Int
 	GetRingPosition() int
 	AnnounceProverJoin()
+	GetWorkerCount() uint32
 }

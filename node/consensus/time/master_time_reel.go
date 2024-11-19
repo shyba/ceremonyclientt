@@ -164,7 +164,7 @@ func (m *MasterTimeReel) createGenesisFrame() *protobufs.ClockFrame {
 		panic(err)
 	}
 
-	txn, err := m.clockStore.NewTransaction()
+	txn, err := m.clockStore.NewTransaction(false)
 	if err != nil {
 		panic(err)
 	}
@@ -212,7 +212,7 @@ func (m *MasterTimeReel) runLoop() {
 						continue
 					}
 
-					txn, err := m.clockStore.NewTransaction()
+					txn, err := m.clockStore.NewTransaction(false)
 					if err != nil {
 						panic(err)
 					}
@@ -281,7 +281,7 @@ func (m *MasterTimeReel) processPending() {
 				continue
 			}
 
-			txn, err := m.clockStore.NewTransaction()
+			txn, err := m.clockStore.NewTransaction(false)
 			if err != nil {
 				panic(err)
 			}

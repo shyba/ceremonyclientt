@@ -113,6 +113,9 @@ message ChallengeProofRequest {
   bytes peer_id = 1;
   uint32 core = 2;
   quilibrium.node.clock.pb.ClockFrame clock_frame = 3;
+  bytes output = 4;
+  uint64 frame_number = 5;
+  uint32 difficulty = 6;
 }
 
 message ChallengeProofResponse {

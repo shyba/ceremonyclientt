@@ -9,18 +9,18 @@ import (
 	"syscall"
 	"time"
 
-	"golang.org/x/crypto/sha3"
-	"source.quilibrium.com/quilibrium/monorepo/node/config"
-	"source.quilibrium.com/quilibrium/monorepo/node/crypto"
-	"source.quilibrium.com/quilibrium/monorepo/node/p2p"
-
 	pcrypto "github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/multiformats/go-multiaddr"
 	mn "github.com/multiformats/go-multiaddr/net"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
+	"golang.org/x/crypto/sha3"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
+	"source.quilibrium.com/quilibrium/monorepo/node/config"
+	"source.quilibrium.com/quilibrium/monorepo/node/crypto"
+	qgrpc "source.quilibrium.com/quilibrium/monorepo/node/internal/grpc"
+	"source.quilibrium.com/quilibrium/monorepo/node/p2p"
 	"source.quilibrium.com/quilibrium/monorepo/node/protobufs"
 )
 
@@ -41,16 +41,42 @@ func (r *DataWorkerIPCServer) CalculateChallengeProof(
 ) (*protobufs.ChallengeProofResponse, error) {
 	challenge := []byte{}
 	challenge = append(challenge, req.PeerId...)
-	challenge = binary.BigEndian.AppendUint64(
-		challenge,
-		req.ClockFrame.FrameNumber,
-	)
-	challenge = binary.BigEndian.AppendUint32(challenge, req.Core)
-	challenge = append(challenge, req.ClockFrame.Output...)
+
+	difficulty := req.Difficulty
+	frameNumber := req.FrameNumber
+	if req.ClockFrame != nil {
+		challenge = binary.BigEndian.AppendUint64(
+			challenge,
+			req.ClockFrame.FrameNumber,
+		)
+		challenge = binary.BigEndian.AppendUint32(challenge, req.Core)
+		challenge = append(challenge, req.ClockFrame.Output...)
+		difficulty = req.ClockFrame.Difficulty
+		frameNumber = req.ClockFrame.FrameNumber
+	} else if req.Output != nil {
+		challenge = binary.BigEndian.AppendUint64(
+			challenge,
+			frameNumber,
+		)
+		challenge = binary.BigEndian.AppendUint32(challenge, req.Core)
+		challenge = append(challenge, req.Output...)
+	} else {
+		return nil, errors.Wrap(
+			errors.New("invalid request"),
+			"calculate challenge proof",
+		)
+	}
+
+	if difficulty == 0 || frameNumber == 0 {
+		return nil, errors.Wrap(
+			errors.New("invalid request"),
+			"calculate challenge proof",
+		)
+	}
 
 	proof, err := r.prover.CalculateChallengeProof(
 		challenge,
-		req.ClockFrame.Difficulty,
+		difficulty,
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "calculate challenge proof")
@@ -109,7 +135,7 @@ func NewDataWorkerIPCServer(
 }
 
 func (r *DataWorkerIPCServer) Start() error {
-	s := grpc.NewServer(
+	s := qgrpc.NewServer(
 		grpc.MaxRecvMsgSize(600*1024*1024),
 		grpc.MaxSendMsgSize(600*1024*1024),
 	)

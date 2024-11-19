@@ -14,7 +14,7 @@ import (
 )
 
 type CoinStore interface {
-	NewTransaction() (Transaction, error)
+	NewTransaction(indexed bool) (Transaction, error)
 	GetCoinsForOwner(owner []byte) ([]uint64, [][]byte, []*protobufs.Coin, error)
 	GetPreCoinProofsForOwner(owner []byte) (
 		[]uint64,
@@ -117,8 +117,8 @@ func genesisSeedKey() []byte {
 	return []byte{COIN, GENESIS}
 }
 
-func (p *PebbleCoinStore) NewTransaction() (Transaction, error) {
-	return p.db.NewBatch(), nil
+func (p *PebbleCoinStore) NewTransaction(indexed bool) (Transaction, error) {
+	return p.db.NewBatch(indexed), nil
 }
 
 func (p *PebbleCoinStore) GetCoinsForOwner(
@@ -415,7 +415,7 @@ func (p *PebbleCoinStore) SetMigrationVersion(
 		return errors.Wrap(err, "migrate")
 	}
 
-	txn, err := p.NewTransaction()
+	txn, err := p.NewTransaction(false)
 	if err != nil {
 		return nil
 	}
@@ -493,7 +493,7 @@ func (p *PebbleCoinStore) internalMigrate(
 		panic(err)
 	}
 
-	txn, err := p.NewTransaction()
+	txn, err := p.NewTransaction(false)
 	if err != nil {
 		return nil
 	}
@@ -537,7 +537,7 @@ func (p *PebbleCoinStore) Migrate(filter []byte, genesisSeedHex string) error {
 			return errors.Wrap(err, "migrate")
 		}
 
-		txn, err := p.NewTransaction()
+		txn, err := p.NewTransaction(false)
 		if err != nil {
 			return nil
 		}

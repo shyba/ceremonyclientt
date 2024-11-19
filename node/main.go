@@ -45,6 +45,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pbnjay/memory"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"source.quilibrium.com/quilibrium/monorepo/node/app"
 	"source.quilibrium.com/quilibrium/monorepo/node/config"
 	qcrypto "source.quilibrium.com/quilibrium/monorepo/node/crypto"
@@ -92,6 +93,11 @@ var (
 		"pprof-server",
 		"",
 		"enable pprof server on specified address (e.g. localhost:6060)",
+	)
+	prometheusServer = flag.String(
+		"prometheus-server",
+		"",
+		"enable prometheus server on specified address (e.g. localhost:8080)",
 	)
 	nodeInfo = flag.Bool(
 		"node-info",
@@ -260,6 +266,14 @@ func main() {
 			mux.HandleFunc("/debug/pprof/symbol", npprof.Symbol)
 			mux.HandleFunc("/debug/pprof/trace", npprof.Trace)
 			log.Fatal(http.ListenAndServe(*pprofServer, mux))
+		}()
+	}
+
+	if *prometheusServer != "" && *core == 0 {
+		go func() {
+			mux := http.NewServeMux()
+			mux.Handle("/metrics", promhttp.Handler())
+			log.Fatal(http.ListenAndServe(*prometheusServer, mux))
 		}()
 	}
 
@@ -584,14 +598,14 @@ func RunForkRepairIfNeeded(
 
 	if bytes.Equal(badFrameSelector, compareSel.FillBytes(make([]byte, 32))) {
 		logger.Info("performing fork repair")
-		txn, _ := coinStore.NewTransaction()
+		txn, _ := coinStore.NewTransaction(false)
 		_, outs, _ := application.GetOutputsFromClockFrame(frame)
 		logger.Info("removing invalid frame at position 48995")
 		for i, output := range outs.Outputs {
 			switch o := output.Output.(type) {
 			case *protobufs.TokenOutput_Coin:
 				address, _ := token.GetAddressOfCoin(o.Coin, frame.FrameNumber, uint64(i))
-				coin, err := coinStore.GetCoinByAddress(txn, address)
+				coin, err := coinStore.GetCoinByAddress(nil, address)
 				if err != nil {
 					fmt.Println(err)
 					return
@@ -642,7 +656,7 @@ func RunForkRepairIfNeeded(
 				return
 			}
 
-			txn, _ := clockStore.NewTransaction()
+			txn, _ := clockStore.NewTransaction(false)
 			if err := overrideHead(
 				txn,
 				clockStore,
@@ -1261,5 +1275,6 @@ func printNodeInfo(cfg *config.Config) {
 	fmt.Println("Seniority: " + new(big.Int).SetBytes(
 		nodeInfo.PeerSeniority,
 	).String())
+	fmt.Println("Active Workers:", nodeInfo.Workers)
 	printBalance(cfg)
 }

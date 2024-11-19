@@ -122,7 +122,7 @@ func dataTimeProofLatestKey(peerId []byte) []byte {
 }
 
 func (p *PebbleDataProofStore) NewTransaction() (Transaction, error) {
-	return p.db.NewBatch(), nil
+	return p.db.NewBatch(false), nil
 }
 
 func internalGetAggregateProof(
@@ -323,6 +323,58 @@ func (p *PebbleDataProofStore) GetAggregateProof(
 		commitment,
 		frameNumber,
 	)
+}
+
+func internalDeleteAggregateProof(
+	db KVDB,
+	txn Transaction,
+	aggregateProof *protobufs.InclusionAggregateProof,
+	commitment []byte,
+) error {
+	buf := binary.BigEndian.AppendUint64(
+		nil,
+		uint64(len(aggregateProof.InclusionCommitments)),
+	)
+	buf = append(buf, aggregateProof.Proof...)
+
+	for i, inc := range aggregateProof.InclusionCommitments {
+		var segments [][]byte
+		if inc.TypeUrl == protobufs.IntrinsicExecutionOutputType {
+			o := &protobufs.IntrinsicExecutionOutput{}
+			if err := proto.Unmarshal(inc.Data, o); err != nil {
+				return errors.Wrap(err, "delete aggregate proof")
+			}
+			leftBits := append([]byte{}, o.Address...)
+			leftBits = append(leftBits, o.Output...)
+			rightBits := o.Proof
+			segments = [][]byte{leftBits, rightBits}
+		} else {
+			segments = [][]byte{inc.Data}
+		}
+
+		for _, segment := range segments {
+			hash := sha3.Sum256(segment)
+			if err := txn.Delete(
+				dataProofSegmentKey(aggregateProof.Filter, hash[:]),
+			); err != nil {
+				return errors.Wrap(err, "delete aggregate proof")
+			}
+		}
+
+		if err := txn.Delete(
+			dataProofInclusionKey(aggregateProof.Filter, commitment, uint64(i)),
+		); err != nil {
+			return errors.Wrap(err, "delete aggregate proof")
+		}
+	}
+
+	if err := txn.Delete(
+		dataProofMetadataKey(aggregateProof.Filter, commitment),
+	); err != nil {
+		return errors.Wrap(err, "delete aggregate proof")
+	}
+
+	return nil
 }
 
 func internalPutAggregateProof(

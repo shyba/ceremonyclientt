@@ -28,6 +28,7 @@ import (
 	"source.quilibrium.com/quilibrium/monorepo/node/execution"
 	"source.quilibrium.com/quilibrium/monorepo/node/internal/cas"
 	"source.quilibrium.com/quilibrium/monorepo/node/internal/frametime"
+	qgrpc "source.quilibrium.com/quilibrium/monorepo/node/internal/grpc"
 	"source.quilibrium.com/quilibrium/monorepo/node/keys"
 	"source.quilibrium.com/quilibrium/monorepo/node/p2p"
 	"source.quilibrium.com/quilibrium/monorepo/node/protobufs"
@@ -61,6 +62,10 @@ type ChannelServer = protobufs.DataService_GetPublicChannelServer
 
 type DataClockConsensusEngine struct {
 	protobufs.UnimplementedDataServiceServer
+
+	ctx    context.Context
+	cancel context.CancelFunc
+
 	lastProven                  uint64
 	difficulty                  uint32
 	config                      *config.Config
@@ -126,6 +131,7 @@ type DataClockConsensusEngine struct {
 	previousFrameProven            *protobufs.ClockFrame
 	previousTree                   *mt.MerkleTree
 	clientReconnectTest            int
+	requestSyncCh                  chan *protobufs.ClockFrame
 }
 
 var _ consensus.DataConsensusEngine = (*DataClockConsensusEngine)(nil)
@@ -215,7 +221,10 @@ func NewDataClockConsensusEngine(
 		rateLimit = 10
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
 	e := &DataClockConsensusEngine{
+		ctx:              ctx,
+		cancel:           cancel,
 		difficulty:       difficulty,
 		logger:           logger,
 		state:            consensus.EngineStateStopped,
@@ -256,6 +265,7 @@ func NewDataClockConsensusEngine(
 			rateLimit,
 			time.Minute,
 		),
+		requestSyncCh: make(chan *protobufs.ClockFrame, 1),
 	}
 
 	logger.Info("constructing consensus engine")
@@ -305,14 +315,14 @@ func (e *DataClockConsensusEngine) Start() <-chan error {
 	go e.runInfoMessageHandler()
 
 	e.logger.Info("subscribing to pubsub messages")
-	e.pubSub.RegisterValidator(e.frameFilter, e.validateFrameMessage)
-	e.pubSub.RegisterValidator(e.txFilter, e.validateTxMessage)
-	e.pubSub.RegisterValidator(e.infoFilter, e.validateInfoMessage)
+	e.pubSub.RegisterValidator(e.frameFilter, e.validateFrameMessage, true)
+	e.pubSub.RegisterValidator(e.txFilter, e.validateTxMessage, true)
+	e.pubSub.RegisterValidator(e.infoFilter, e.validateInfoMessage, true)
 	e.pubSub.Subscribe(e.frameFilter, e.handleFrameMessage)
 	e.pubSub.Subscribe(e.txFilter, e.handleTxMessage)
 	e.pubSub.Subscribe(e.infoFilter, e.handleInfoMessage)
 	go func() {
-		server := grpc.NewServer(
+		server := qgrpc.NewServer(
 			grpc.MaxSendMsgSize(20*1024*1024),
 			grpc.MaxRecvMsgSize(20*1024*1024),
 		)
@@ -328,7 +338,7 @@ func (e *DataClockConsensusEngine) Start() <-chan error {
 
 	go func() {
 		if e.dataTimeReel.GetFrameProverTries()[0].Contains(e.provingKeyAddress) {
-			server := grpc.NewServer(
+			server := qgrpc.NewServer(
 				grpc.MaxSendMsgSize(1*1024*1024),
 				grpc.MaxRecvMsgSize(1*1024*1024),
 			)
@@ -479,6 +489,9 @@ func (e *DataClockConsensusEngine) Start() <-chan error {
 	}()
 
 	go e.runLoop()
+	go e.runSync()
+	go e.runFramePruning()
+
 	go func() {
 		time.Sleep(30 * time.Second)
 		e.logger.Info("checking for snapshots to play forward")
@@ -558,11 +571,13 @@ func (e *DataClockConsensusEngine) PerformTimeProof(
 		go func() {
 			resp, err :=
 				client.client.CalculateChallengeProof(
-					context.Background(),
+					e.ctx,
 					&protobufs.ChallengeProofRequest{
-						PeerId:     e.pubSub.GetPeerID(),
-						Core:       uint32(i),
-						ClockFrame: frame,
+						PeerId:      e.pubSub.GetPeerID(),
+						Core:        uint32(i),
+						Output:      frame.Output,
+						FrameNumber: frame.FrameNumber,
+						Difficulty:  frame.Difficulty,
 					},
 				)
 			if err != nil {
@@ -594,6 +609,7 @@ func (e *DataClockConsensusEngine) PerformTimeProof(
 
 func (e *DataClockConsensusEngine) Stop(force bool) <-chan error {
 	e.logger.Info("stopping ceremony consensus engine")
+	e.cancel()
 	e.stateMx.Lock()
 	e.state = consensus.EngineStateStopping
 	e.stateMx.Unlock()
@@ -620,6 +636,7 @@ func (e *DataClockConsensusEngine) Stop(force bool) <-chan error {
 				},
 			},
 		},
+		Timestamp: time.Now().UnixMilli(),
 	})
 
 	wg := sync.WaitGroup{}
@@ -765,9 +782,9 @@ func (e *DataClockConsensusEngine) createParallelDataClientsFromListAndIndex(
 		return nil, errors.Wrap(err, "create parallel data client")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, cancel := context.WithTimeout(e.ctx, 1*time.Second)
 	defer cancel()
-	conn, err := grpc.DialContext(
+	conn, err := qgrpc.DialContext(
 		ctx,
 		addr,
 		grpc.WithTransportCredentials(
@@ -828,9 +845,9 @@ func (
 		return nil, errors.Wrap(err, "create parallel data client")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, cancel := context.WithTimeout(e.ctx, 1*time.Second)
 	defer cancel()
-	conn, err := grpc.DialContext(
+	conn, err := qgrpc.DialContext(
 		ctx,
 		addr,
 		grpc.WithTransportCredentials(
@@ -880,9 +897,9 @@ func (e *DataClockConsensusEngine) createParallelDataClientsFromList() (
 			continue
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		ctx, cancel := context.WithTimeout(e.ctx, 1*time.Second)
 		defer cancel()
-		conn, err := grpc.DialContext(
+		conn, err := qgrpc.DialContext(
 			ctx,
 			addr,
 			grpc.WithTransportCredentials(
@@ -943,9 +960,9 @@ func (e *DataClockConsensusEngine) createParallelDataClientsFromBaseMultiaddr(
 			e.logger.Error("could not get dial args", zap.Error(err))
 			continue
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		ctx, cancel := context.WithTimeout(e.ctx, 1*time.Second)
 		defer cancel()
-		conn, err := grpc.DialContext(
+		conn, err := qgrpc.DialContext(
 			ctx,
 			addr,
 			grpc.WithTransportCredentials(
@@ -970,4 +987,15 @@ func (e *DataClockConsensusEngine) createParallelDataClientsFromBaseMultiaddr(
 		zap.Int("parallelism", parallelism),
 	)
 	return clients, nil
+}
+
+func (e *DataClockConsensusEngine) GetWorkerCount() uint32 {
+	count := uint32(0)
+	for _, client := range e.clients {
+		if client != nil {
+			count++
+		}
+	}
+
+	return count
 }

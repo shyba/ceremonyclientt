@@ -63,6 +63,7 @@ message NodeInfoResponse {
   bytes version = 4;
   bytes peer_seniority = 5;
   int32 prover_ring = 6;
+  uint32 workers = 7;
 }
 
 message PutPeerInfoRequest {
@@ -245,6 +246,7 @@ message TokenRequest {
     AnnounceProverPause pause = 8;
     AnnounceProverResume resume = 9;
   }
+  int64 timestamp = 10;
 }
 
 message TokenRequests {
@@ -635,12 +637,14 @@ message SendMessageResponse{}
 
 message GetTokensByAccountRequest {
   bytes address = 1;
+  bool include_metadata = 2;
 }
 
 message TokensByAccountResponse {
   repeated Coin coins = 1;
   repeated uint64 frame_numbers = 2;
   repeated bytes addresses = 3;
+  repeated int64 timestamps = 4;
 }
 
 message GetPreCoinProofsByAccountRequest {

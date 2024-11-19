@@ -30,8 +30,8 @@ const (
 
 // Defines the default BlossomSub parameters.
 var (
-	BlossomSubD                                = 6
-	BlossomSubDlo                              = 5
+	BlossomSubD                                = 8
+	BlossomSubDlo                              = 6
 	BlossomSubDhi                              = 12
 	BlossomSubDscore                           = 4
 	BlossomSubDout                             = 2
@@ -41,7 +41,7 @@ var (
 	BlossomSubGossipRetransmission             = 3
 	BlossomSubBitmaskWidth                     = 256
 	BlossomSubHeartbeatInitialDelay            = 100 * time.Millisecond
-	BlossomSubHeartbeatInterval                = 1 * time.Second
+	BlossomSubHeartbeatInterval                = 700 * time.Millisecond
 	BlossomSubFanoutTTL                        = 60 * time.Second
 	BlossomSubPrunePeers                       = 16
 	BlossomSubPruneBackoff                     = time.Minute
@@ -633,6 +633,19 @@ loop:
 
 func (bs *BlossomSubRouter) RemovePeer(p peer.ID) {
 	log.Debugf("PEERDOWN: Remove disconnected peer %s", p)
+	masks := make([][]byte, 0)
+	bs.meshMx.Lock()
+	for bitmask, peers := range bs.mesh {
+		if _, ok := peers[p]; !ok {
+			continue
+		}
+		masks = append(masks, []byte(bitmask))
+	}
+	bs.meshMx.Unlock()
+	for _, bitmask := range masks {
+		log.Debugf("PEERDOWN: Pruning peer %s from bitmask %s", p, bitmask)
+		bs.tracer.Prune(p, bitmask)
+	}
 	bs.tracer.RemovePeer(p)
 	delete(bs.peers, p)
 	bs.meshMx.Lock()

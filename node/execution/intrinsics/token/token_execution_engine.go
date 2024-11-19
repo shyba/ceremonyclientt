@@ -185,7 +185,7 @@ func NewTokenExecutionEngine(
 				panic(err)
 			}
 
-			txn, err := clockStore.NewTransaction()
+			txn, err := clockStore.NewTransaction(false)
 			if err != nil {
 				panic(err)
 			}
@@ -249,7 +249,7 @@ func NewTokenExecutionEngine(
 			panic(err)
 		}
 
-		txn, err := clockStore.NewTransaction()
+		txn, err := clockStore.NewTransaction(false)
 		if err != nil {
 			panic(err)
 		}
@@ -390,6 +390,7 @@ func NewTokenExecutionEngine(
 							},
 						},
 					},
+					Timestamp: gotime.Now().UnixMilli(),
 				},
 			)
 		}
@@ -536,6 +537,8 @@ func (e *TokenExecutionEngine) ProcessFrame(
 
 	proverTrieJoinRequests := [][]byte{}
 	proverTrieLeaveRequests := [][]byte{}
+	mapSnapshot := ToSerializedMap(e.peerSeniority)
+	activeMap := NewFromMap(mapSnapshot)
 
 	for i, output := range app.TokenOutputs.Outputs {
 		switch o := output.Output.(type) {
@@ -556,7 +559,7 @@ func (e *TokenExecutionEngine) ProcessFrame(
 				return nil, errors.Wrap(err, "process frame")
 			}
 		case *protobufs.TokenOutput_DeletedCoin:
-			coin, err := e.coinStore.GetCoinByAddress(txn, o.DeletedCoin.Address)
+			coin, err := e.coinStore.GetCoinByAddress(nil, o.DeletedCoin.Address)
 			if err != nil {
 				txn.Abort()
 				return nil, errors.Wrap(err, "process frame")
@@ -596,14 +599,14 @@ func (e *TokenExecutionEngine) ProcessFrame(
 						break
 					}
 				}
-				if _, ok := (*e.peerSeniority)[addr]; !ok {
-					(*e.peerSeniority)[addr] = PeerSeniorityItem{
+				if _, ok := (*activeMap)[addr]; !ok {
+					(*activeMap)[addr] = PeerSeniorityItem{
 						seniority: 10,
 						addr:      addr,
 					}
 				} else {
-					(*e.peerSeniority)[addr] = PeerSeniorityItem{
-						seniority: (*e.peerSeniority)[addr].seniority + 10,
+					(*activeMap)[addr] = PeerSeniorityItem{
+						seniority: (*activeMap)[addr].seniority + 10,
 						addr:      addr,
 					}
 				}
@@ -649,7 +652,7 @@ func (e *TokenExecutionEngine) ProcessFrame(
 					return nil, errors.Wrap(err, "process frame")
 				}
 
-				sen, ok := (*e.peerSeniority)[string(addr)]
+				sen, ok := (*activeMap)[string(addr)]
 				if !ok {
 					logger(
 						"peer announced with no seniority",
@@ -706,7 +709,7 @@ func (e *TokenExecutionEngine) ProcessFrame(
 
 				logger("combined aggregate and 1.4.19-21 seniority", zap.Uint64("seniority", total))
 
-				(*e.peerSeniority)[string(addr)] = PeerSeniorityItem{
+				(*activeMap)[string(addr)] = PeerSeniorityItem{
 					seniority: aggregated + additional,
 					addr:      string(addr),
 				}
@@ -720,7 +723,7 @@ func (e *TokenExecutionEngine) ProcessFrame(
 						return nil, errors.Wrap(err, "process frame")
 					}
 
-					(*e.peerSeniority)[string(addr)] = PeerSeniorityItem{
+					(*activeMap)[string(addr)] = PeerSeniorityItem{
 						seniority: 0,
 						addr:      string(addr),
 					}
@@ -734,7 +737,7 @@ func (e *TokenExecutionEngine) ProcessFrame(
 					return nil, errors.Wrap(err, "process frame")
 				}
 
-				sen, ok := (*e.peerSeniority)[string(addr)]
+				sen, ok := (*activeMap)[string(addr)]
 				if !ok {
 					logger(
 						"peer announced with no seniority",
@@ -777,7 +780,7 @@ func (e *TokenExecutionEngine) ProcessFrame(
 				}
 				total := GetAggregatedSeniority([]string{peerIds[0]}).Uint64() + additional
 				logger("combined aggregate and 1.4.19-21 seniority", zap.Uint64("seniority", total))
-				(*e.peerSeniority)[string(addr)] = PeerSeniorityItem{
+				(*activeMap)[string(addr)] = PeerSeniorityItem{
 					seniority: total,
 					addr:      string(addr),
 				}
@@ -789,14 +792,14 @@ func (e *TokenExecutionEngine) ProcessFrame(
 				return nil, errors.Wrap(err, "process frame")
 			}
 
-			if _, ok := (*e.peerSeniority)[string(addr)]; !ok {
-				(*e.peerSeniority)[string(addr)] = PeerSeniorityItem{
+			if _, ok := (*activeMap)[string(addr)]; !ok {
+				(*activeMap)[string(addr)] = PeerSeniorityItem{
 					seniority: 20,
 					addr:      string(addr),
 				}
 			} else {
-				(*e.peerSeniority)[string(addr)] = PeerSeniorityItem{
-					seniority: (*e.peerSeniority)[string(addr)].seniority + 20,
+				(*activeMap)[string(addr)] = PeerSeniorityItem{
+					seniority: (*activeMap)[string(addr)].seniority + 20,
 					addr:      string(addr),
 				}
 			}
@@ -822,14 +825,14 @@ func (e *TokenExecutionEngine) ProcessFrame(
 			}
 		case *protobufs.TokenOutput_Penalty:
 			addr := string(o.Penalty.Account.GetImplicitAccount().Address)
-			if _, ok := (*e.peerSeniority)[addr]; !ok {
-				(*e.peerSeniority)[addr] = PeerSeniorityItem{
+			if _, ok := (*activeMap)[addr]; !ok {
+				(*activeMap)[addr] = PeerSeniorityItem{
 					seniority: 0,
 					addr:      addr,
 				}
 				proverTrieLeaveRequests = append(proverTrieLeaveRequests, []byte(addr))
 			} else {
-				if (*e.peerSeniority)[addr].seniority > o.Penalty.Quantity {
+				if (*activeMap)[addr].seniority > o.Penalty.Quantity {
 					for _, t := range app.Tries {
 						if t.Contains([]byte(addr)) {
 							v := t.Get([]byte(addr))
@@ -840,12 +843,12 @@ func (e *TokenExecutionEngine) ProcessFrame(
 							break
 						}
 					}
-					(*e.peerSeniority)[addr] = PeerSeniorityItem{
-						seniority: (*e.peerSeniority)[addr].seniority - o.Penalty.Quantity,
+					(*activeMap)[addr] = PeerSeniorityItem{
+						seniority: (*activeMap)[addr].seniority - o.Penalty.Quantity,
 						addr:      addr,
 					}
 				} else {
-					(*e.peerSeniority)[addr] = PeerSeniorityItem{
+					(*activeMap)[addr] = PeerSeniorityItem{
 						seniority: 0,
 						addr:      addr,
 					}
@@ -858,23 +861,23 @@ func (e *TokenExecutionEngine) ProcessFrame(
 	joinAddrs := tries.NewMinHeap[PeerSeniorityItem]()
 	leaveAddrs := tries.NewMinHeap[PeerSeniorityItem]()
 	for _, addr := range proverTrieJoinRequests {
-		if _, ok := (*e.peerSeniority)[string(addr)]; !ok {
+		if _, ok := (*activeMap)[string(addr)]; !ok {
 			joinAddrs.Push(PeerSeniorityItem{
 				addr:      string(addr),
 				seniority: 0,
 			})
 		} else {
-			joinAddrs.Push((*e.peerSeniority)[string(addr)])
+			joinAddrs.Push((*activeMap)[string(addr)])
 		}
 	}
 	for _, addr := range proverTrieLeaveRequests {
-		if _, ok := (*e.peerSeniority)[string(addr)]; !ok {
+		if _, ok := (*activeMap)[string(addr)]; !ok {
 			leaveAddrs.Push(PeerSeniorityItem{
 				addr:      string(addr),
 				seniority: 0,
 			})
 		} else {
-			leaveAddrs.Push((*e.peerSeniority)[string(addr)])
+			leaveAddrs.Push((*activeMap)[string(addr)])
 		}
 	}
 
@@ -887,10 +890,14 @@ func (e *TokenExecutionEngine) ProcessFrame(
 
 	ProcessJoinsAndLeaves(joinReqs, leaveReqs, app, e.peerSeniority, frame)
 
+	if frame.FrameNumber == application.PROOF_FRAME_SENIORITY_REPAIR {
+		e.performSeniorityMapRepair(activeMap, frame)
+	}
+
 	err = e.clockStore.PutPeerSeniorityMap(
 		txn,
 		e.intrinsicFilter,
-		ToSerializedMap(e.peerSeniority),
+		ToSerializedMap(activeMap),
 	)
 	if err != nil {
 		txn.Abort()
@@ -902,6 +909,8 @@ func (e *TokenExecutionEngine) ProcessFrame(
 		txn.Abort()
 		return nil, errors.Wrap(err, "process frame")
 	}
+
+	e.peerSeniority = activeMap
 
 	if frame.FrameNumber == application.PROOF_FRAME_RING_RESET ||
 		frame.FrameNumber == application.PROOF_FRAME_RING_RESET_2 {
@@ -928,6 +937,95 @@ func (e *TokenExecutionEngine) ProcessFrame(
 	}
 
 	return app.Tries, nil
+}
+
+func (e *TokenExecutionEngine) performSeniorityMapRepair(
+	activeMap *PeerSeniority,
+	frame *protobufs.ClockFrame,
+) {
+	if e.pubSub.GetNetwork() != 0 {
+		return
+	}
+
+	e.logger.Info(
+		"repairing seniority map from historic data, this may take a while",
+	)
+
+	RebuildPeerSeniority(0)
+	for f := uint64(application.PROOF_FRAME_RING_RESET_2); f < frame.FrameNumber; f++ {
+		frame, _, err := e.clockStore.GetDataClockFrame(e.intrinsicFilter, f, false)
+		if err != nil {
+			break
+		}
+
+		reqs, _, _ := application.GetOutputsFromClockFrame(frame)
+
+		for _, req := range reqs.Requests {
+			switch t := req.Request.(type) {
+			case *protobufs.TokenRequest_Join:
+				if t.Join.Announce != nil && len(
+					t.Join.Announce.PublicKeySignaturesEd448,
+				) > 0 {
+					addr, err := e.getAddressFromSignature(
+						t.Join.Announce.PublicKeySignaturesEd448[0],
+					)
+					if err != nil {
+						continue
+					}
+
+					peerId, err := e.getPeerIdFromSignature(
+						t.Join.Announce.PublicKeySignaturesEd448[0],
+					)
+					if err != nil {
+						continue
+					}
+
+					additional := uint64(0)
+
+					_, prfs, err := e.coinStore.GetPreCoinProofsForOwner(addr)
+					for _, pr := range prfs {
+						if pr.IndexProof == nil && pr.Difficulty == 0 && pr.Commitment == nil {
+							// approximate average per interval:
+							add := new(big.Int).SetBytes(pr.Amount)
+							add.Quo(add, big.NewInt(58800000))
+							if add.Cmp(big.NewInt(4000000)) > 0 {
+								add = big.NewInt(4000000)
+							}
+							additional = add.Uint64()
+						}
+					}
+
+					if err != nil && !errors.Is(err, store.ErrNotFound) {
+						continue
+					}
+					peerIds := []string{peerId.String()}
+					if len(t.Join.Announce.PublicKeySignaturesEd448) > 1 {
+						for _, announce := range t.Join.Announce.PublicKeySignaturesEd448[1:] {
+							peerId, err := e.getPeerIdFromSignature(
+								announce,
+							)
+							if err != nil {
+								continue
+							}
+
+							peerIds = append(peerIds, peerId.String())
+						}
+					}
+
+					aggregated := GetAggregatedSeniority(peerIds).Uint64()
+					total := aggregated + additional
+					sen, ok := (*activeMap)[string(addr)]
+
+					if !ok || sen.seniority < total {
+						(*activeMap)[string(addr)] = PeerSeniorityItem{
+							seniority: total,
+							addr:      string(addr),
+						}
+					}
+				}
+			}
+		}
+	}
 }
 
 func ProcessJoinsAndLeaves(
@@ -1046,9 +1144,7 @@ func (e *TokenExecutionEngine) VerifyExecution(
 					}
 
 					parent, tries, err := e.clockStore.GetDataClockFrame(
-						append(
-							p2p.GetBloomFilter(application.TOKEN_ADDRESS, 256, 3),
-						),
+						p2p.GetBloomFilter(application.TOKEN_ADDRESS, 256, 3),
 						frame.FrameNumber-1,
 						false,
 					)
@@ -1370,6 +1466,7 @@ func (e *TokenExecutionEngine) AnnounceProverJoin() {
 					Announce: e.AnnounceProverMerge(),
 				},
 			},
+			Timestamp: gotime.Now().UnixMilli(),
 		},
 	)
 }
@@ -1441,4 +1538,8 @@ func (e *TokenExecutionEngine) getAddressFromSignature(
 	}
 
 	return altAddr.FillBytes(make([]byte, 32)), nil
+}
+
+func (e *TokenExecutionEngine) GetWorkerCount() uint32 {
+	return e.clock.GetWorkerCount()
 }
