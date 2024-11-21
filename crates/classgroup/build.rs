@@ -14,7 +14,7 @@ fn main() {
     } else {
         panic!("unsupported target {target}");
     }
-    cc::Build::new()
+    cc::Build::new().cpp(true)
         .file("src/vdf.cpp")
         .compile("vdf");
 }

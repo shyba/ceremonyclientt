@@ -25,7 +25,7 @@ use libc::{c_int, c_long, c_ulong, c_void, size_t};
 use std::{mem, usize};
 // We use the unsafe versions to avoid unecessary allocations.
 extern "C" {
-    fn _gmp_nudupl(a: *mut Mpz, b: *mut Mpz, c: *mut Mpz);
+    fn adapted_nudupl(a: *mut Mpz, b: *mut Mpz, c: *mut Mpz);
 }
 // We use the unsafe versions to avoid unecessary allocations.
 #[link(name = "gmp", kind = "static")]
@@ -236,7 +236,7 @@ pub fn mpz_mul_ui(rop: &mut Mpz, op1: &Mpz, op2: u64) {
 
 #[inline]
 pub fn gmp_nudupl(a: &mut Mpz, b: &mut Mpz, c: &mut Mpz) {
-    unsafe { gmp_nudupl(a, b, c); }
+    unsafe { adapted_nudupl(a, b, c); }
 }
 
 #[inline]

@@ -41,11 +41,6 @@ struct form {
 };
 
 
-mpz_t D, L;
-mpz_t G, dx, dy, By, Dy, x, y, bx, by, ax, ay, q, t, Q1, denom;
-form F, f_;
-mpz_t faa, fab, fac, fba, fbb, fbc, fca, fcb, fcc, a2, mu;
-fmpz_t fy, fx, fby, fbx, fL;
 const int64_t THRESH = 1UL<<31;
 const int64_t EXP_THRESH = 31;
 
@@ -55,6 +50,10 @@ ostream& operator<<(ostream& os, const form& f) {
 
 //this normalization is based on Akashnil's entry to the previous round
 inline void normalize(form& f) {
+    form f_;
+    mpz_t mu, a2, denom;
+	mpz_inits(mu, a2, denom, NULL);
+
     mpz_add(mu, f.b, f.c);
     mpz_mul_ui(a2, f.c, 2);
     mpz_fdiv_q(denom, mu, a2);
@@ -125,6 +124,8 @@ inline void fast_reduce(form& f) {
     int64_t a, b, c, a_, b_, c_;
     int64_t aa, ab, ac, ba, bb, bc, ca, cb, cc;
     long int a_exp, b_exp, c_exp, max_exp, min_exp;
+        mpz_t faa, fab, fac, fba, fbb, fbc, fca, fcb, fcc, a2, mu;
+        mpz_inits(faa, fab, fac, fba, fbb, fbc, fca, fcb, fcc, a2, mu, NULL);
 
     while (!test_reduction(f)) {
 
@@ -210,6 +211,20 @@ inline void fast_reduce(form& f) {
 // https://www.researchgate.net/publication/221451638_Computational_aspects_of_NUCOMP
 //based on the implementation from Bulaiden
 inline void gmp_nudupl(form& f) {
+mpz_t D, L;
+mpz_t G, dx, dy, By, Dy, x, y, bx, by, ax, ay, q, t, Q1, denom;
+form F, f_;
+fmpz_t fy, fx, fby, fbx, fL;
+	mpz_init(denom);
+	mpz_inits(D, L, NULL);
+	mpz_inits(G, dx, dy, By, Dy, x, y, bx, by, ax, ay, q, t, Q1, denom, NULL);
+	mpz_inits(F.a, F.b, F.c, NULL);
+
+	fmpz_init(fy);
+	fmpz_init(fx);
+	fmpz_init(fby);
+	fmpz_init(fbx);
+	fmpz_init(fL);
 	mpz_gcdext(G, y, NULL, f.b, f.a);
 
 	mpz_divexact(By, f.a, G);
@@ -278,12 +293,18 @@ inline void gmp_nudupl(form& f) {
 	mpz_submul(f.c, ax, dx);
 }
 void adapted_nudupl(mpz_t& a, mpz_t& b, mpz_t& c) {
-    return;
+    cout << "HERE\n";
+	//initialise variables
     form newform;
+    mpz_inits(newform.a, newform.b, newform.c, NULL);
     mpz_set(newform.a, a);
     mpz_set(newform.b, b);
     mpz_set(newform.c, c);
-    return gmp_nudupl(newform);
+    gmp_nudupl(newform);
+	fast_reduce(newform);
+    mpz_set(a, newform.a);
+    mpz_set(b, newform.b);
+    mpz_set(c, newform.c);
 }
 
 
@@ -303,15 +324,11 @@ inline void generator_for_discriminant(form& x, mpz_t& d) {
 int main(int argc, char* argv[]) {
 
 	//initialise variables
-	mpz_inits(D, L, NULL);
-	mpz_inits(G, dx, dy, By, Dy, x, y, bx, by, ax, ay, q, t, Q1, denom, NULL);
+    form F;
+    mpz_t D, L, fy;
+    mpz_t mu, a2, denom;
+	mpz_inits(D, L, fy, mu, a2, denom, NULL);
 	mpz_inits(F.a, F.b, F.c, NULL);
-
-	fmpz_init(fy);
-	fmpz_init(fx);
-	fmpz_init(fby);
-	fmpz_init(fbx);
-	fmpz_init(fL);
 
 	//inputted discriminant stored in D
 	mpz_set_str(D, argv[1], 0);
@@ -324,8 +341,8 @@ int main(int argc, char* argv[]) {
 
 	//NUDUPL square and reduce for n times
 	for (int i=0; i<n; i++) {
-		gmp_nudupl(F);
-		fast_reduce(F);
+		//gmp_nudupl(F);
+        adapted_nudupl(F.a, F.b, F.c);
 	}
 
 	cout << F.a << endl << F.b;

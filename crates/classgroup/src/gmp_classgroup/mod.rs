@@ -15,7 +15,6 @@
 use super::ClassGroup;
 use super::gmp::mpz::Mpz;
 use super::gmp::mpz::ProbabPrimeResult::NotPrime;
-use ffi::mpz_cmpabs;
 use num_traits::{One, Zero};
 use std::{
     borrow::Borrow,
@@ -57,26 +56,6 @@ pub struct Ctx {
     b: Mpz,
     k: Mpz,
     t: Mpz,
-    a2: Mpz,
-    fa: Mpz,
-    fb: Mpz,
-    fc: Mpz,
-    g: Mpz,
-    y: Mpz,
-    bx: Mpz,
-    by: Mpz,
-    ax: Mpz,
-    ay: Mpz,
-    dx: Mpz,
-    dy: Mpz,
-    By: Mpz,
-    Dy: Mpz,
-    Q1: Mpz,
-    fy: Mpz, 
-    fx: Mpz, 
-    fby:Mpz, 
-    fbx:Mpz, 
-    fl: Mpz, 
     mu: Mpz,
     v: Mpz,
     sigma: Mpz,
@@ -222,25 +201,20 @@ impl GmpClassGroup {
         if self.b > ctx.negative_a && self.b <= self.a {
             return;
         }
-        ffi::mpz_add(&mut ctx.mu, &self.b, &self.c);
-        ffi::mpz_mul_ui(&mut ctx.a2, &self.c, 2);
-        ffi::mpz_fdiv_q(&mut ctx.denom, &ctx.mu, &ctx.a2);
+        ffi::mpz_sub(&mut ctx.r, &self.a, &self.b);
+        ffi::mpz_mul_2exp(&mut ctx.denom, &self.a, 1);
+        ffi::mpz_fdiv_q(&mut ctx.negative_a, &ctx.r, &ctx.denom);
+        swap(&mut ctx.negative_a, &mut ctx.r);
+        swap(&mut ctx.old_b, &mut self.b);
+        ffi::mpz_mul(&mut ctx.ra, &ctx.r, &self.a);
+        ffi::mpz_mul_2exp(&mut ctx.negative_a, &ctx.ra, 1);
+        ffi::mpz_add(&mut self.b, &ctx.old_b, &ctx.negative_a);
 
-        ffi::mpz_set(&mut ctx.fa, &self.c);
+        ffi::mpz_mul(&mut ctx.negative_a, &ctx.ra, &ctx.r);
+        ffi::mpz_add(&mut ctx.old_a, &self.c, &ctx.negative_a);
 
-        ffi::mpz_mul_ui(&mut ctx.a2, &ctx.denom, 2);
-        ffi::mpz_neg(&mut ctx.fb, &self.b);
-        ffi::mpz_addmul(&mut ctx.fb, &self.c, &ctx.a2);
-
-        ffi::mpz_set(&mut ctx.fc, &self.a);
-        ffi::mpz_submul(&mut ctx.fc, &self.b, &ctx.denom);
-        let den = &ctx.denom.clone();
-        ffi::mpz_mul(&mut ctx.denom, den, den);
-        ffi::mpz_addmul(&mut ctx.fc, &self.c, &ctx.denom);
-
-        ffi::mpz_set(&mut self.a, &ctx.fa);
-        ffi::mpz_set(&mut self.b, &ctx.fb);
-        ffi::mpz_set(&mut self.c, &ctx.fc);
+        ffi::mpz_mul(&mut ctx.ra, &ctx.r, &ctx.old_b);
+        ffi::mpz_add(&mut self.c, &ctx.old_a, &ctx.ra);
 
         self.assert_valid();
     }
@@ -286,10 +260,7 @@ impl GmpClassGroup {
 
     fn inner_square_impl(&mut self, ctx: &mut Ctx) {
         self.assert_valid();
-
         ffi::gmp_nudupl(&mut self.a, &mut self.b, &mut self.c);
-
-        self.inner_reduce(ctx);
     }
 
     #[cfg_attr(not(debug_assertions), inline(always))]
@@ -545,26 +516,6 @@ impl Default for Ctx {
             h: Mpz::new(),
             mu: Mpz::new(),
             v: Mpz::new(),
-            a2: Mpz::new(),
-            fa: Mpz::new(),
-            fb: Mpz::new(),
-            fc: Mpz::new(),
-            y: Mpz::new(),
-            bx: Mpz::new(),
-            by: Mpz::new(),
-            ax: Mpz::new(),
-            ay: Mpz::new(),
-            dx: Mpz::new(),
-            dy: Mpz::new(),
-            By: Mpz::new(),
-            Dy: Mpz::new(),
-            Q1: Mpz::new(),
-            fy: Mpz::new(), 
-            fx: Mpz::new(), 
-            fby:Mpz::new(), 
-            fbx:Mpz::new(), 
-            fl: Mpz::new(), 
-            g: Mpz::new(),
             sigma: Mpz::new(),
             lambda: Mpz::new(),
         }
