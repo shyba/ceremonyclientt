@@ -17,7 +17,6 @@ members = [
     "crates/classgroup",
     "crates/bls48581",
     "crates/rpm",
-    "crates/chiavdf/rust_bindings",
     "crates/vdf",
 ]
 
