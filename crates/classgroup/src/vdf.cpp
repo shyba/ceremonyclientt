@@ -41,6 +41,11 @@ struct form {
 };
 
 
+mpz_t D, L;
+mpz_t G, dx, dy, By, Dy, x, y, bx, by, ax, ay, q, t, Q1, denom;
+form F, f_;
+mpz_t faa, fab, fac, fba, fbb, fbc, fca, fcb, fcc, a2, mu;
+fmpz_t fy, fx, fby, fbx, fL;
 const int64_t THRESH = 1UL<<31;
 const int64_t EXP_THRESH = 31;
 
@@ -50,11 +55,6 @@ ostream& operator<<(ostream& os, const form& f) {
 
 //this normalization is based on Akashnil's entry to the previous round
 inline void normalize(form& f) {
-mpz_t D, L;
-mpz_t G, dx, dy, By, Dy, x, y, bx, by, ax, ay, q, t, Q1, denom;
-form F, f_;
-mpz_t faa, fab, fac, fba, fbb, fbc, fca, fcb, fcc, a2, mu;
-fmpz_t fy, fx, fby, fbx, fL;
     mpz_add(mu, f.b, f.c);
     mpz_mul_ui(a2, f.c, 2);
     mpz_fdiv_q(denom, mu, a2);
@@ -120,7 +120,6 @@ inline bool test_reduction(form& f) {
 // This is based on Akashnil's integer approximation reduce
 inline void fast_reduce(form& f) {
 
-mpz_t faa, fab, fac, fba, fbb, fbc, fca, fcb, fcc, a2, mu;
     int64_t u, v, w, x, u_, v_, w_, x_;
     int64_t delta, gamma, sgn;
     int64_t a, b, c, a_, b_, c_;
@@ -211,11 +210,6 @@ mpz_t faa, fab, fac, fba, fbb, fbc, fca, fcb, fcc, a2, mu;
 // https://www.researchgate.net/publication/221451638_Computational_aspects_of_NUCOMP
 //based on the implementation from Bulaiden
 inline void gmp_nudupl(form& f) {
-mpz_t D, L;
-mpz_t G, dx, dy, By, Dy, x, y, bx, by, ax, ay, q, t, Q1, denom;
-form F, f_;
-mpz_t faa, fab, fac, fba, fbb, fbc, fca, fcb, fcc, a2, mu;
-fmpz_t fy, fx, fby, fbx, fL;
 	mpz_gcdext(G, y, NULL, f.b, f.a);
 
 	mpz_divexact(By, f.a, G);
@@ -307,11 +301,6 @@ inline void generator_for_discriminant(form& x, mpz_t& d) {
 }
 
 int main(int argc, char* argv[]) {
-mpz_t D, L;
-mpz_t G, dx, dy, By, Dy, x, y, bx, by, ax, ay, q, t, Q1, denom;
-form F, f_;
-mpz_t faa, fab, fac, fba, fbb, fbc, fca, fcb, fcc, a2, mu;
-fmpz_t fy, fx, fby, fbx, fL;
 
 	//initialise variables
 	mpz_inits(D, L, NULL);
