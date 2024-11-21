@@ -13,11 +13,12 @@
 # and limitations under the License.
 [workspace]
 members = [
-    "crates/vdf",
     "crates/channel",
     "crates/classgroup",
     "crates/bls48581",
     "crates/rpm",
+    "crates/chiavdf/rust_bindings",
+    "crates/vdf",
 ]
 
 [profile.release]

@@ -48,8 +48,12 @@ extern "C" {
     fn __gmpz_cmp(op1: mpz_srcptr, op2: mpz_srcptr) -> c_int;
     fn __gmpz_cmp_ui(op1: mpz_srcptr, op2: c_ulong) -> c_int;
     fn __gmpz_add(rop: mpz_ptr, op1: mpz_srcptr, op2: mpz_srcptr);
+    fn __gmpz_addmul(rop: mpz_ptr, op1: mpz_srcptr, op2: mpz_srcptr);
     fn __gmpz_add_ui(rop: mpz_ptr, op1: mpz_srcptr, op2: c_ulong);
     fn __gmpz_sub(rop: mpz_ptr, op1: mpz_srcptr, op2: mpz_srcptr);
+    fn __gmpz_submul(rop: mpz_ptr, op1: mpz_srcptr, op2: mpz_srcptr);
+    fn __gmpz_cmpabs(by: mpz_ptr, l: mpz_srcptr);
+    fn __gmpz_divexact(rop: mpz_ptr, op1: mpz_srcptr, op2: mpz_srcptr);
     fn __gmpz_sub_ui(rop: mpz_ptr, op1: mpz_srcptr, op2: c_ulong);
     fn __gmpz_ui_sub(rop: mpz_ptr, op1: c_ulong, op2: mpz_srcptr);
     fn __gmpz_mul(rop: mpz_ptr, op1: mpz_srcptr, op2: mpz_srcptr);

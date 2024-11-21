@@ -1,4 +1,5 @@
 use std::env;
+use cc;
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
@@ -13,4 +14,7 @@ fn main() {
     } else {
         panic!("unsupported target {target}");
     }
+    cc::Build::new()
+        .file("src/vdf.cpp")
+        .compile("vdf");
 }
