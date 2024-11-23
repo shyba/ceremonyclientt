@@ -28,7 +28,7 @@ extern "C" {
     fn adapted_nudupl(a: *mut Mpz, b: *mut Mpz, c: *mut Mpz);
 }
 // We use the unsafe versions to avoid unecessary allocations.
-#[link(name = "gmp", kind = "static")]
+#[link(name = "gmp")]
 extern "C" {
     fn __gmpz_gcdext(gcd: *mut Mpz, s: *mut Mpz, t: *mut Mpz, a: *const Mpz, b: *const Mpz);
     fn __gmpz_gcd(rop: *mut Mpz, op1: *const Mpz, op2: *const Mpz);
@@ -236,7 +236,9 @@ pub fn mpz_mul_ui(rop: &mut Mpz, op1: &Mpz, op2: u64) {
 
 #[inline]
 pub fn gmp_nudupl(a: &mut Mpz, b: &mut Mpz, c: &mut Mpz) {
-    unsafe { adapted_nudupl(a, b, c); }
+    unsafe {
+        adapted_nudupl(a, b, c);
+    }
 }
 
 #[inline]
