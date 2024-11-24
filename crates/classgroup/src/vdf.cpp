@@ -46,9 +46,6 @@
     const int64_t THRESH = 1UL<<31;
     const int64_t EXP_THRESH = 31;
 
-    ostream& operator<<(ostream& os, const form& f) {
-    	return os << "a: " <<  f.a << endl << "b: " << f.b << endl << "c: " << f.c << endl;
-    }
 
 extern "C" {
     //this normalization is based on Akashnil's entry to the previous round
@@ -214,7 +211,7 @@ extern "C" {
 
     // https://www.researchgate.net/publication/221451638_Computational_aspects_of_NUCOMP
     //based on the implementation from Bulaiden
-    inline void gmp_nudupl(form& f) {
+    inline void gmp_nudupl(form& f, ulong times) {
     mpz_t D, L;
     mpz_t G, dx, dy, By, Dy, x, y, bx, by, ax, ay, q, t, Q1, denom;
     form F, f_;
@@ -229,87 +226,102 @@ extern "C" {
     	fmpz_init(fby);
     	fmpz_init(fbx);
     	fmpz_init(fL);
-    	mpz_gcdext(G, y, NULL, f.b, f.a);
+        while(times > 0){
+    	    mpz_gcdext(G, y, NULL, f.b, f.a);
 
-    	mpz_divexact(By, f.a, G);
-    	mpz_divexact(Dy, f.b, G);
+    	    mpz_divexact(By, f.a, G);
+    	    mpz_divexact(Dy, f.b, G);
 
-    	mpz_mul(bx, y, f.c);
-    	mpz_mod(bx, bx, By);
+    	    mpz_mul(bx, y, f.c);
+    	    mpz_mod(bx, bx, By);
 
-    	mpz_set(by, By);
+    	    mpz_set(by, By);
 
-    	if (mpz_cmpabs(by, L) <= 0) {
-    		mpz_mul(dx, bx, Dy);
-    		mpz_sub(dx, dx, f.c);
-    		mpz_divexact(dx, dx, By);
-    		mpz_mul(f.a, by, by);
-    		mpz_mul(f.c, bx, bx);
-    		mpz_add(t, bx, by);
-    		mpz_mul(t, t, t);
-    		mpz_sub(f.b, f.b, t);
-    		mpz_add(f.b, f.b, f.a);
-    		mpz_add(f.b, f.b, f.c);
-    		mpz_mul(t, G, dx);
-    		mpz_sub(f.c, f.c, t);
-    		return;
-    	}
+    	    if (mpz_cmpabs(by, L) <= 0) {
+    	    	mpz_mul(dx, bx, Dy);
+    	    	mpz_sub(dx, dx, f.c);
+    	    	mpz_divexact(dx, dx, By);
+    	    	mpz_mul(f.a, by, by);
+    	    	mpz_mul(f.c, bx, bx);
+    	    	mpz_add(t, bx, by);
+    	    	mpz_mul(t, t, t);
+    	    	mpz_sub(f.b, f.b, t);
+    	    	mpz_add(f.b, f.b, f.a);
+    	    	mpz_add(f.b, f.b, f.c);
+    	    	mpz_mul(t, G, dx);
+    	    	mpz_sub(f.c, f.c, t);
+                times--;
+    	    	continue;
+    	    }
 
-    	fmpz_set_mpz(fy, y);
-    	fmpz_set_mpz(fx, x);
-    	fmpz_set_mpz(fby, by);
-    	fmpz_set_mpz(fbx, bx);
-    	fmpz_set_mpz(fL, L);
+    	    fmpz_set_mpz(fy, y);
+    	    fmpz_set_mpz(fx, x);
+    	    fmpz_set_mpz(fby, by);
+    	    fmpz_set_mpz(fbx, bx);
+    	    fmpz_set_mpz(fL, L);
 
-    	fmpz_xgcd_partial(fy, fx, fby, fbx, fL);
+    	    fmpz_xgcd_partial(fy, fx, fby, fbx, fL);
 
-    	fmpz_get_mpz(y, fy);
-    	fmpz_get_mpz(x, fx);
-    	fmpz_get_mpz(by, fby);
-    	fmpz_get_mpz(bx, fbx);
-    	fmpz_get_mpz(L, fL);
+    	    fmpz_get_mpz(y, fy);
+    	    fmpz_get_mpz(x, fx);
+    	    fmpz_get_mpz(by, fby);
+    	    fmpz_get_mpz(bx, fbx);
+    	    fmpz_get_mpz(L, fL);
 
-    	mpz_neg(x, x);
-    	if (mpz_sgn(x) > 0) {
-    		mpz_neg(y, y);
-    	} else {
-    		mpz_neg(by, by);
-    	}
+    	    mpz_neg(x, x);
+    	    if (mpz_sgn(x) > 0) {
+    	    	mpz_neg(y, y);
+    	    } else {
+    	    	mpz_neg(by, by);
+    	    }
 
-    	mpz_mul(ax, G, x);
-    	mpz_mul(ay, G, y);
+    	    mpz_mul(ax, G, x);
+    	    mpz_mul(ay, G, y);
 
-    	mpz_mul(t, Dy, bx);
-    	mpz_submul(t, f.c, x);
-    	mpz_divexact(dx, t, By);
-    	mpz_mul(Q1, y, dx);
-    	mpz_add(dy, Q1, Dy);
-    	mpz_add(f.b, dy, Q1);
-    	mpz_mul(f.b, f.b, G);
-    	mpz_divexact(dy, dy, x);
-    	mpz_mul(f.a, by, by);
-    	mpz_mul(f.c, bx, bx);
-    	mpz_add(t, bx, by);
-    	mpz_submul(f.b, t, t);
-    	mpz_add(f.b, f.b, f.a);
-    	mpz_add(f.b, f.b, f.c);
-    	mpz_submul(f.a, ay, dy);
-    	mpz_submul(f.c, ax, dx);
+    	    mpz_mul(t, Dy, bx);
+    	    mpz_submul(t, f.c, x);
+    	    mpz_divexact(dx, t, By);
+    	    mpz_mul(Q1, y, dx);
+    	    mpz_add(dy, Q1, Dy);
+    	    mpz_add(f.b, dy, Q1);
+    	    mpz_mul(f.b, f.b, G);
+    	    mpz_divexact(dy, dy, x);
+    	    mpz_mul(f.a, by, by);
+    	    mpz_mul(f.c, bx, bx);
+    	    mpz_add(t, bx, by);
+    	    mpz_submul(f.b, t, t);
+    	    mpz_add(f.b, f.b, f.a);
+    	    mpz_add(f.b, f.b, f.c);
+    	    mpz_submul(f.a, ay, dy);
+    	    mpz_submul(f.c, ax, dx);
+            times--;
+            fast_reduce(f);
+        }
+
+    	mpz_clear(denom);
+    	mpz_clears(D, L, NULL);
+    	mpz_clears(G, dx, dy, By, Dy, x, y, bx, by, ax, ay, q, t, Q1, denom, NULL);
+    	mpz_clears(F.a, F.b, F.c, NULL);
+
+    	fmpz_clear(fy);
+    	fmpz_clear(fx);
+    	fmpz_clear(fby);
+    	fmpz_clear(fbx);
+    	fmpz_clear(fL);
     }
 
-    void adapted_nudupl(mpz_t& a, mpz_t& b, mpz_t& c) {
-        cout << "HERE\n";
+    void adapted_nudupl(mpz_t& a, mpz_t& b, mpz_t& c, ulong times) {
         //initialise variables
         form newform;
         mpz_inits(newform.a, newform.b, newform.c, NULL);
         mpz_set(newform.a, a);
         mpz_set(newform.b, b);
         mpz_set(newform.c, c);
-        gmp_nudupl(newform);
-        fast_reduce(newform);
+        gmp_nudupl(newform, times);
         mpz_set(a, newform.a);
         mpz_set(b, newform.b);
         mpz_set(c, newform.c);
+        mpz_clears(newform.a, newform.b, newform.c, NULL);
     }
 
 
@@ -325,33 +337,4 @@ extern "C" {
     	fast_reduce(x);
     	mpz_clear(denom);
     }
-/*
-    int main(int argc, char* argv[]) {
-
-    	//initialise variables
-        form F;
-        mpz_t D, L, fy;
-        mpz_t mu, a2, denom;
-    	mpz_inits(D, L, fy, mu, a2, denom, NULL);
-    	mpz_inits(F.a, F.b, F.c, NULL);
-
-    	//inputted discriminant stored in D
-    	mpz_set_str(D, argv[1], 0);
-    	generator_for_discriminant(F, D);
-    	//this stores the number of iterations of squaring in n
-    	uint64_t n = stoi(argv[2]);
-
-    	mpz_abs(L, D);
-    	mpz_root(L, L, 4);
-
-    	//NUDUPL square and reduce for n times
-    	for (int i=0; i<n; i++) {
-    		//gmp_nudupl(F);
-            adapted_nudupl(F.a, F.b, F.c);
-    	}
-
-    	cout << F.a << endl << F.b;
-    	cout << flush;
-    }
-   */
 }
