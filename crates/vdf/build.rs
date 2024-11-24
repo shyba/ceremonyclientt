@@ -104,7 +104,11 @@ fn generate(f: &mut dyn Write) {
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
-    
+
+    println!("cargo:rustc-link-arg=-lgmp");
+    println!("cargo:rustc-link-arg=-lflint");
+    println!("cargo:rustc-link-arg=-lmpfr");
+
     uniffi::generate_scaffolding("src/lib.udl").expect("uniffi generation failed");
 
     let manifest_path = env::var("OUT_DIR").expect("cargo should have set this");
