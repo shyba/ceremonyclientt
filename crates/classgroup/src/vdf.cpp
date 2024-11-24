@@ -325,7 +325,7 @@ extern "C" {
     	fast_reduce(x);
     	mpz_clear(denom);
     }
-
+/*
     int main(int argc, char* argv[]) {
 
     	//initialise variables
@@ -353,4 +353,5 @@ extern "C" {
     	cout << F.a << endl << F.b;
     	cout << flush;
     }
+   */
 }
