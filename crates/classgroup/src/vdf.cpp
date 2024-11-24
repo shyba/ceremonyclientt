@@ -34,7 +34,6 @@
     #define LOG2(X) (63 - __builtin_clzll((X)))
     using namespace std;
 
-
     struct form {
     	// y = ax^2 + bxy + y^2
     	mpz_t a;
@@ -47,14 +46,15 @@
     const int64_t THRESH = 1UL<<31;
     const int64_t EXP_THRESH = 31;
 
-ostream& operator<<(ostream& os, const form& f) {
-	return os << "a: " <<  f.a << endl << "b: " << f.b << endl << "c: " << f.c << endl;
-}
+    ostream& operator<<(ostream& os, const form& f) {
+    	return os << "a: " <<  f.a << endl << "b: " << f.b << endl << "c: " << f.c << endl;
+    }
 
 extern "C" {
     //this normalization is based on Akashnil's entry to the previous round
     inline void normalize(form& f) {
         form f_;
+        mpz_inits(f_.a, f_.b, f_.c, NULL);
         mpz_t mu, a2, denom;
     	mpz_inits(mu, a2, denom, NULL);
 
